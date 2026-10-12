@@ -21,6 +21,8 @@ const ROOT = __dirname;
 // Lives outside the install folder so npm updates never wipe your token and ticks.
 const DATA_DIR = process.env.UWCHECK_DATA || path.join(os.homedir(), '.uwcheck');
 const SEATTLE = 'America/Los_Angeles';
+// Without this, a source that stops answering holds up every sync for minutes.
+const FETCH_TIMEOUT_MS = 20 * 1000;
 
 const FILES = {
   config: path.join(DATA_DIR, 'config.json'),
@@ -52,10 +54,16 @@ const DEFAULT_STATE = { done: {}, colors: {}, custom: [] };
 
 // ---------- storage ----------
 
+// A missing file means a first run. A broken one (say, a hand edit with a typo) is moved aside
+// rather than overwritten by the next save; if it can't be moved, fail instead.
 function readJson(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      fs.renameSync(file, file + '.bad');
+      console.error(`Could not read ${file} (${err.message}). Moved it to ${file}.bad and started fresh.`);
+    }
     return structuredClone(fallback);
   }
 }
@@ -173,7 +181,7 @@ function icsDate(prop) {
 async function fetchCanvas() {
   const url = config.canvasIcsUrl.trim();
   if (!url) return null;
-  const res = await fetch(url, { headers: { Accept: 'text/calendar' } });
+  const res = await fetch(url, { headers: { Accept: 'text/calendar' }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`Canvas feed returned HTTP ${res.status}`);
   const text = await res.text();
   if (!text.includes('BEGIN:VCALENDAR')) throw new Error('That URL is not a calendar feed');
@@ -211,7 +219,7 @@ async function fetchCanvas() {
 // With no courses configured, use every active course on the account ("CSE 351 - 26au" -> "CSE 351").
 async function edCourseList(region, headers) {
   if (config.edCourses.length) return config.edCourses;
-  const res = await fetch(`https://${region}.edstem.org/api/user`, { headers });
+  const res = await fetch(`https://${region}.edstem.org/api/user`, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (res.status === 401 || res.status === 403) throw new Error('Ed rejected the API token');
   if (!res.ok) throw new Error(`Ed returned HTTP ${res.status}`);
   const body = await res.json();
@@ -225,12 +233,14 @@ async function fetchEd() {
   if (!token) return null;
   const region = config.edRegion || 'us';
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
-  const items = [];
-  for (const { id: courseId, course } of await edCourseList(region, headers)) {
-    const res = await fetch(`https://${region}.edstem.org/api/courses/${courseId}/lessons`, { headers });
-    if (res.status === 401 || res.status === 403) throw new Error('Ed rejected the API token');
+  return fetchEach('ed', await edCourseList(region, headers), async ({ id: courseId, course }) => {
+    const res = await fetch(`https://${region}.edstem.org/api/courses/${courseId}/lessons`, {
+      headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 401) throw new Error('Ed rejected the API token');
     if (!res.ok) throw new Error(`Ed course ${courseId} returned HTTP ${res.status}`);
     const body = await res.json();
+    const items = [];
     const modules = Object.fromEntries((body.modules || []).map((m) => [m.id, m.name || '']));
     for (const l of body.lessons || []) {
       if (!l.due_at) continue;
@@ -249,8 +259,8 @@ async function fetchEd() {
         completed: status === 'completed',
       });
     }
-  }
-  return items;
+    return items;
+  });
 }
 
 // ---------- source: UW CSE course website (assignments.html template) ----------
@@ -297,18 +307,34 @@ function parseCourseSite(html, pageUrl, course) {
 
 async function fetchSites() {
   if (!config.courseSites.length) return null;
-  const items = [];
-  for (const { url, course } of config.courseSites) {
-    const res = await fetch(url);
+  return fetchEach('site', config.courseSites, async ({ url, course }) => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`${url} returned HTTP ${res.status}`);
     const found = parseCourseSite(await res.text(), url, course);
     if (!found.length) throw new Error(`No deadlines found on ${url}`);
-    items.push(...found);
-  }
-  return items;
+    return found;
+  });
 }
 
 // ---------- sync + merge ----------
+
+// Fetches each Ed course or course site on its own, so one bad one doesn't freeze the rest.
+// A failed one keeps its last good items; the error carries the combined items to syncAll.
+async function fetchEach(source, parts, fetchPart) {
+  const prev = cache.sources?.[source]?.items || [];
+  const items = [];
+  const errors = new Set();
+  await Promise.all(parts.map(async (part) => {
+    try {
+      items.push(...await fetchPart(part));
+    } catch (err) {
+      errors.add(err.message);
+      items.push(...prev.filter((i) => i.course === part.course));
+    }
+  }));
+  if (errors.size) throw Object.assign(new Error([...errors].join('; ')), { items });
+  return items;
+}
 
 const SOURCES = { canvas: fetchCanvas, ed: fetchEd, site: fetchSites };
 let syncing = null;
@@ -322,12 +348,12 @@ async function syncAll() {
       try {
         const items = await fn();
         if (items === null) {
-          cache.sources[name] = { ...prev, status: 'not-configured', error: null };
+          cache.sources[name] = { items: [], status: 'not-configured', error: null };
         } else {
           cache.sources[name] = { items, status: 'ok', error: null, syncedAt: new Date().toISOString() };
         }
       } catch (err) {
-        cache.sources[name] = { ...prev, status: 'error', error: err.message };
+        cache.sources[name] = { ...prev, items: err.items || prev.items, status: 'error', error: err.message };
       }
     }));
     cache.lastSync = new Date().toISOString();
@@ -340,15 +366,13 @@ async function syncAll() {
   }
 }
 
-function mergedItems() {
-  const src = cache.sources || {};
+function mergedItems(src = cache.sources || {}, custom = state.custom) {
+  // Compare cleaned-up course codes, so a site named "CSE351" still matches "CSE 351" from Ed.
+  const key = (i) => `${courseFromCode(i.course.toUpperCase())}|${codeKey(i.title)}`;
   const ed = src.ed?.items || [];
-  const edKeys = new Set(ed.map((i) => `${i.course}|${codeKey(i.title)}`));
-  const site = (src.site?.items || []).filter((i) => {
-    const k = codeKey(i.title);
-    return !k || !edKeys.has(`${i.course}|${k}`);
-  });
-  return [...(src.canvas?.items || []), ...ed, ...site, ...state.custom];
+  const edKeys = new Set(ed.map(key));
+  const site = (src.site?.items || []).filter((i) => !codeKey(i.title) || !edKeys.has(key(i)));
+  return [...(src.canvas?.items || []), ...ed, ...site, ...custom];
 }
 
 function publicPayload() {
@@ -452,6 +476,8 @@ const STATIC = {
   '/icon.svg': ['icon.svg', 'image/svg+xml'],
   '/icon-192.png': ['icon-192.png', 'image/png'],
   '/icon-512.png': ['icon-512.png', 'image/png'],
+  '/fonts/open-sans.woff2': ['fonts/open-sans.woff2', 'font/woff2'],
+  '/fonts/encode-sans.woff2': ['fonts/encode-sans.woff2', 'font/woff2'],
 };
 
 const server = http.createServer(async (req, res) => {
@@ -480,6 +506,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/config') {
       applyConfig(await readBody(req));
+      // A sync already running uses the old settings; wait for it, then sync again.
+      if (syncing) await syncing.catch(() => {});
       await syncAll();
       return send(res, 200, publicPayload());
     }
@@ -730,13 +758,16 @@ function startServer() {
   const url = `http://localhost:${PORT}`;
   const shouldOpen = !process.argv.includes('--no-open');
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.log(`UWCheck is already running at ${url}`);
-      if (shouldOpen) openBrowser(url);
-      setTimeout(() => process.exit(0), 500);
-    } else {
-      throw err;
-    }
+    if (err.code !== 'EADDRINUSE') throw err;
+    isRunning().then((ours) => {
+      if (ours) {
+        console.log(`UWCheck is already running at ${url}`);
+        if (shouldOpen) openBrowser(url);
+      } else {
+        console.log(`Another program is using port ${PORT}. Try another one: uwcheck --port ${PORT + 1}`);
+      }
+      setTimeout(() => process.exit(ours ? 0 : 1), 500);
+    });
   });
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`UWCheck running at ${url}  (Ctrl+C to stop)`);
@@ -763,4 +794,4 @@ if (require.main === module) {
   else startServer();
 }
 
-module.exports = { parseCourseSite, parseIcs, zoned, kindOf, codeKey, courseFromCode };
+module.exports = { parseCourseSite, parseIcs, icsDate, zoned, kindOf, codeKey, courseFromCode, mergedItems };

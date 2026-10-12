@@ -34,5 +34,6 @@ jobs:
         run: |
           node --check server.js
           node server.js --version
+          npm test
 
       - run: npm publish

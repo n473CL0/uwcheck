@@ -70,7 +70,7 @@ This adds **UWCheck** to your Start menu and desktop on Windows, to `~/Applicati
 | | |
 |---|---|
 | **Tick off work** | Use the checkboxes in the to-do list, or click any item on the calendar. |
-| **Hide a course** | Click it in the legend. Click its coloured dot to change the colour. |
+| **Hide a course** | Click it in the legend. Double-click to show only that course, and again to show all. Click its coloured dot to change the colour. |
 | **Filters** | Hide assignment types, or show completed and unreleased items. |
 | **Add your own** | Use **+ Add**, or the **+** on any calendar day. |
 | **Views** | Month / Week. Week view shows full titles. In month view, click **+N more** to see a busy day. |
@@ -100,7 +100,7 @@ Course websites ──┘   (Node, no dependencies)         (last good copy)    
 
 - **`server.js`** fetches each source, normalises course codes (`MATH/STAT 394 A` becomes `MATH 394`, `E E 201` becomes `EE 201`), handles Seattle time zones and daylight saving without any libraries, and serves a small JSON API.
 - **`public/index.html`** is the whole interface in one file: plain HTML, CSS and JavaScript, with no build step.
-- **`~/.uwcheck/`** (e.g. `C:Usersyou.uwcheck`) is created on first run, outside the install folder, so updates never wipe it. It holds `config.json` (your feed URL and token), `state.json` (ticks, colours, custom tasks) and `cache.json`. Set `UWCHECK_DATA` to use a different folder.
+- **`~/.uwcheck/`** (e.g. `C:\Users\you\.uwcheck`) is created on first run, outside the install folder, so updates never wipe it. It holds `config.json` (your feed URL and token), `state.json` (ticks, colours, custom tasks) and `cache.json`. Set `UWCHECK_DATA` to use a different folder.
 
 ## Privacy
 
@@ -122,4 +122,4 @@ On Windows you can also double-click **`Start Dashboard.bat`**. On macOS/Linux, 
 
 ## License
 
-[MIT](LICENSE). Not affiliated with or endorsed by the University of Washington, Instructure or Ed.
+[MIT](LICENSE). The bundled Open Sans and Encode Sans fonts are under the [SIL Open Font License](public/fonts/OFL.txt). Not affiliated with or endorsed by the University of Washington, Instructure or Ed.

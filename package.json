@@ -32,10 +32,12 @@
     "public/icon.svg",
     "public/icon-192.png",
     "public/icon-512.png",
-    "public/icon.ico"
+    "public/icon.ico",
+    "public/fonts/"
   ],
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test.js"
   },
   "engines": {
     "node": ">=18"

@@ -37,13 +37,12 @@
     --ink: #24282e;
     --on-ink: #f8f8f6;
     --danger: #b03a2e;
-    --ok: #3f8a5a;
+    --ok: #3f9a5c;
     --warn: #b7822a;
     --today: #f5f1e6;
     --accent: #4b2e83;
     --on-accent: #ffffff;
     --gold: #b7a57a;
-    --check: #2b7a47;
     --shadow: 0 12px 32px rgba(36, 40, 46, .12), 0 2px 6px rgba(36, 40, 46, .06);
     --r-ctl: 8px;
     --r-panel: 12px;
@@ -61,21 +60,20 @@
     --ink: #e9e9e6;
     --on-ink: #17181a;
     --danger: #e2766a;
-    --ok: #6cbf8a;
     --warn: #deb065;
     --today: #26241f;
-    --accent: #b9a6e4;
-    --on-accent: #1a1426;
     --gold: #b7a57a;
-    --check: #6cc48a;
     --shadow: 0 12px 32px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .3);
     color-scheme: dark;
   }
+  /* UW brand fonts, bundled so the page makes no outside requests and works offline. */
+  @font-face { font-family: "Open Sans"; src: url(/fonts/open-sans.woff2) format("woff2"); font-weight: 300 800; font-display: swap; }
+  @font-face { font-family: "Encode Sans"; src: url(/fonts/encode-sans.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
     background: var(--bg); color: var(--text);
-    font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    font: 14px/1.45 "Open Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     display: flex; flex-direction: column;
     border-top: 3px solid var(--accent);
     -webkit-font-smoothing: antialiased;
@@ -110,10 +108,11 @@
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
     padding: 14px 24px; min-height: 64px;
   }
-  header h1 { font-size: 18px; font-weight: 700; margin: 0 12px 0 0; letter-spacing: -.015em; }
-  /* Purple UW, green Check, matching the icon; both use the lighter shades in dark mode. */
-  header h1 .uw { color: var(--accent); }
-  header h1 .ck { color: var(--check); }
+  header h1 {
+    display: flex; align-items: center; gap: 12px; margin: 0 12px 0 0;
+    font: 700 19px/1 "Encode Sans", "Open Sans", sans-serif; letter-spacing: -.01em;
+  }
+  header h1 img { height: 36px; width: auto; }
   .sources { display: flex; gap: 4px; align-items: center; color: var(--faint); font-size: 12.5px; flex-wrap: wrap; }
   .pill {
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px;
@@ -127,6 +126,8 @@
   .pill.error { color: var(--danger); }
   .pill.update { color: var(--accent); }
   .pill.update .dot { background: var(--accent); }
+  /* Logo purple is too dark to read as text on the dark background; the dot carries the colour. */
+  :root[data-theme="dark"] .pill.update { color: var(--text); }
   .synced { margin-left: 4px; }
 
   /* layout */
@@ -355,7 +356,7 @@
 </head>
 <body>
 <header>
-  <h1><span class="uw">UW</span><span class="ck">Check</span></h1>
+  <h1><img src="/icon.svg" alt="">UWCheck</h1>
   <div class="sources" id="sources"></div>
   <div class="spacer"></div>
   <div class="seg" role="group" aria-label="Time zone">
@@ -451,7 +452,7 @@
     <div class="field">
       <label for="sEd">Ed API token</label>
       <input id="sEd" type="password" autocomplete="off">
-      <div class="help">Create one at <a href="https://edstem.org/us/settings/api-tokens" target="_blank" rel="noopener">edstem.org, under Settings, API Tokens</a>. Stored only on this computer, in <code>data/config.json</code>. <span id="edState"></span></div>
+      <div class="help">Create one at <a href="https://edstem.org/us/settings/api-tokens" target="_blank" rel="noopener">edstem.org, under Settings, API Tokens</a>. Stored only on this computer, in <code>~/.uwcheck/config.json</code>. <label id="edState" hidden><input type="checkbox" id="sEdClear"> Remove the saved token</label></div>
     </div>
     <details class="adv">
       <summary>Advanced: course mappings</summary>
@@ -745,6 +746,18 @@ new ResizeObserver(() => {
   fitFrame = requestAnimationFrame(fitDays);
 }).observe($('grid'));
 
+// Double-click a course in the legend to show only it; double-click it again to show all.
+// Listens on the legend box, because each click re-renders the course buttons.
+$('legend').addEventListener('dblclick', (e) => {
+  const c = e.target.closest('.tag')?.dataset.course;
+  if (!c || e.target.matches('input')) return;
+  const others = courses().filter((x) => x !== c);
+  const isolated = others.every((x) => ui.hiddenCourses.includes(x)) && !ui.hiddenCourses.includes(c);
+  ui.hiddenCourses = isolated ? [] : others;
+  saveUi();
+  render();
+});
+
 function renderLegend() {
   const box = $('legend');
   box.replaceChildren();
@@ -752,7 +765,8 @@ function renderLegend() {
     const tag = document.createElement('button');
     tag.className = 'tag' + (ui.hiddenCourses.includes(c) ? ' off' : '');
     tag.style.setProperty('--c', colorOf(c));
-    tag.title = 'Click to show/hide · click the dot to change colour';
+    tag.dataset.course = c;
+    tag.title = 'Click to show/hide · double-click to show only this · click the dot to change colour';
     const sw = document.createElement('span');
     sw.className = 'swatch';
     const pick = document.createElement('input');
@@ -1060,7 +1074,8 @@ function openSettings() {
   $('sCanvas').value = c.canvasIcsUrl || '';
   $('sEd').value = '';
   $('sEd').placeholder = c.hasEdToken ? '•••••• saved (leave blank to keep)' : 'Paste your token';
-  $('edState').textContent = c.hasEdToken ? 'A token is saved.' : '';
+  $('edState').hidden = !c.hasEdToken;
+  $('sEdClear').checked = false;
   $('sEdCourses').value = (c.edCourses || []).map((x) => `${x.id} = ${x.course}`).join('\n');
   $('sSites').value = (c.courseSites || []).map((x) => `${x.url} = ${x.course}`).join('\n');
   $('sCanvasCourses').value = Object.entries(c.canvasCourses || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
@@ -1083,6 +1098,7 @@ $('setForm').addEventListener('submit', async (e) => {
     data = await api('/api/config', {
       canvasIcsUrl: $('sCanvas').value,
       edToken: $('sEd').value,
+      clearEdToken: $('sEdClear').checked,
       edCourses: pairs($('sEdCourses').value).map(([id, course]) => ({ id: Number(id), course })),
       courseSites: pairs($('sSites').value).map(([url, course]) => ({ url, course })),
       canvasCourses: Object.fromEntries(pairs($('sCanvasCourses').value)),
@@ -1178,8 +1194,12 @@ document.addEventListener('keydown', (e) => {
   else if (e.key.toLowerCase() === 'w') setCalView('week');
   else if (e.key.toLowerCase() === 't') { ui.view = null; render(); }
 });
-// Pick up background syncs when you come back to the tab.
-window.addEventListener('focus', () => load().catch(() => {}));
+// Coming back to the tab syncs if the last sync is over 2 minutes old, so work you just
+// finished (say, an Ed lesson) shows as done. Otherwise it just picks up background syncs.
+window.addEventListener('focus', () => {
+  const stale = isConnected() && Date.now() - new Date(data.lastSync || 0) > 2 * 60 * 1000;
+  (stale ? api('/api/sync', {}) : Promise.resolve()).then(load).catch(() => {});
+});
 setInterval(() => load().catch(() => {}), 5 * 60 * 1000);
 
 load().then(() => { if (!isConnected()) openSettings(); }).catch((e) => {
