@@ -10,3 +10,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.tgz
+
+# Personal development notes
+DEVELOPING.md

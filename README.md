@@ -118,7 +118,7 @@ cd uwcheck
 npm start
 ```
 
-On Windows you can also double-click **`Start Dashboard.bat`**. On macOS/Linux, run `./start.sh`. Maintainers: see [RELEASING.md](RELEASING.md).
+On Windows you can also double-click **`Start Dashboard.bat`**. On macOS/Linux, run `./start.sh`.
 
 ## License
 
