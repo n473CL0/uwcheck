@@ -12,7 +12,15 @@
   "bugs": {
     "url": "https://github.com/n473CL0/uwcheck/issues"
   },
-  "keywords": ["uw", "university-of-washington", "canvas", "edstem", "calendar", "dashboard", "deadlines"],
+  "keywords": [
+    "uw",
+    "university-of-washington",
+    "canvas",
+    "edstem",
+    "calendar",
+    "dashboard",
+    "deadlines"
+  ],
   "main": "server.js",
   "bin": {
     "uwcheck": "server.js"
@@ -23,7 +31,8 @@
     "public/manifest.webmanifest",
     "public/icon.svg",
     "public/icon-192.png",
-    "public/icon-512.png"
+    "public/icon-512.png",
+    "public/icon.ico"
   ],
   "scripts": {
     "start": "node server.js"

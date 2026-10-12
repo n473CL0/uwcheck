@@ -49,10 +49,21 @@ Keep the terminal open while you use the dashboard, and press <kbd>Ctrl</kbd>+<k
 
 ### Install it as an app
 
-- **Command:** run `npm install -g uwcheck` once. After that, `uwcheck` starts it from any terminal, and `npm update -g uwcheck` updates it.
-- **Window and taskbar icon:** with UWCheck open in Chrome or Edge, click the install icon in the address bar. You can also use **⋮ → Cast, save and share → Install page as app** in Chrome, or **⋯ → Apps → Install this site as an app** in Edge. It then opens in its own window with no tabs and gets a Start-menu / Dock entry. The `uwcheck` command still has to be running for the app window to load.
+To get a UWCheck icon you can click like any other app:
 
-Run `uwcheck --help` for options (`--port`, `--no-open`).
+```sh
+npm install -g uwcheck
+uwcheck --install
+```
+
+This adds **UWCheck** to your Start menu and desktop on Windows, to `~/Applications` on macOS, or to your app launcher on Linux. Clicking it starts UWCheck in the background if it isn't already running, then opens it in its own window using Chrome or Edge. You don't need to keep a terminal open.
+
+| Command | What it does |
+|---|---|
+| `uwcheck --stop` | Stops the background server (the app icon starts it again). |
+| `uwcheck --uninstall` | Removes the app icon and stops UWCheck. Your settings are kept. |
+| `npm update -g uwcheck` | Updates to the latest version. |
+| `uwcheck --help` | Lists all options (`--port`, `--no-open`, ...). |
 
 ## Using it
 
@@ -93,7 +104,7 @@ Course websites ──┘   (Node, no dependencies)         (last good copy)    
 
 ## Privacy
 
-UWCheck listens only on `127.0.0.1`, so nothing else on your network can reach it. Your Canvas feed URL and Ed token are stored in plain text in `~/.uwcheck/config.json` and are sent only to Canvas and Ed. Treat that folder like a password and don't share it.
+UWCheck listens only on `127.0.0.1`, so nothing else on your network can reach it, and it rejects requests from other websites. Your Canvas feed URL and Ed token are stored in plain text in `~/.uwcheck/config.json` and are sent only to Canvas and Ed. Treat that folder like a password and don't share it.
 
 ## Running from source
 

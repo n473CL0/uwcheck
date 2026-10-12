@@ -7,7 +7,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFileSync, spawn } = require('child_process');
 
 const pkg = require('./package.json');
 
@@ -454,10 +454,20 @@ const STATIC = {
 
 const server = http.createServer(async (req, res) => {
   try {
+    // Only answer this computer's browser: blocks DNS rebinding, and requiring JSON on POST
+    // forces a CORS preflight, so other websites can't change your settings.
+    if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return send(res, 403, { error: 'Forbidden' });
+    if (req.method === 'POST' && !String(req.headers['content-type']).startsWith('application/json')) {
+      return send(res, 415, { error: 'Expected JSON' });
+    }
     const url = new URL(req.url, `http://${req.headers.host}`);
     const asset = req.method === 'GET' && STATIC[url.pathname];
     if (asset) return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', asset[0])), asset[1]);
     if (req.method === 'GET' && url.pathname === '/api/data') return send(res, 200, publicPayload());
+    if (req.method === 'POST' && url.pathname === '/api/quit') {
+      send(res, 200, { ok: true });
+      return setTimeout(() => process.exit(0), 100);
+    }
     if (req.method === 'POST' && url.pathname === '/api/sync') {
       await syncAll();
       return send(res, 200, publicPayload());
@@ -483,27 +493,181 @@ function openBrowser(url) {
   exec(cmd);
 }
 
+// ---------- desktop app ----------
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const ICON_PNG = path.join(ROOT, 'public', 'icon-512.png');
+
+// A Chromium browser can show the dashboard as its own app window, without tabs or an address bar.
+function appBrowser() {
+  const { ProgramFiles = '', LOCALAPPDATA = '' } = process.env;
+  const x86 = process.env['ProgramFiles(x86)'] || '';
+  const candidates = {
+    win32: [
+      path.join(ProgramFiles, 'Google/Chrome/Application/chrome.exe'),
+      path.join(LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe'),
+      path.join(x86, 'Microsoft/Edge/Application/msedge.exe'),
+      path.join(ProgramFiles, 'Microsoft/Edge/Application/msedge.exe'),
+    ],
+    darwin: [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    ],
+    linux: ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+      '/snap/bin/chromium', '/usr/bin/microsoft-edge', '/usr/bin/brave-browser'],
+  }[process.platform] || [];
+  return candidates.find((p) => fs.existsSync(p));
+}
+
+function openAppWindow(url) {
+  const browser = appBrowser();
+  if (!browser) return openBrowser(url);
+  spawn(browser, [`--app=${url}`], { detached: true, stdio: 'ignore' }).unref();
+}
+
+async function isRunning() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/api/data`, { signal: AbortSignal.timeout(1500) });
+    return res.ok && Array.isArray((await res.json()).items);
+  } catch {
+    return false;
+  }
+}
+
+// What the app icon runs: start the server in the background if needed, then open the window.
+async function launchApp() {
+  if (!(await isRunning())) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const log = fs.openSync(path.join(DATA_DIR, 'server.log'), 'a');
+    spawn(process.execPath, [__filename, '--no-open', '--port', String(PORT)], {
+      detached: true, stdio: ['ignore', log, log], windowsHide: true,
+    }).unref();
+    for (let i = 0; i < 40 && !(await isRunning()); i++) await sleep(250);
+  }
+  openAppWindow(`http://localhost:${PORT}`);
+}
+
+async function stopServer() {
+  try {
+    await fetch(`http://127.0.0.1:${PORT}/api/quit`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      signal: AbortSignal.timeout(1500),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function shortcutPaths() {
+  const home = os.homedir();
+  if (process.platform === 'win32') {
+    const ps = "[Environment]::GetFolderPath('Programs'); [Environment]::GetFolderPath('Desktop')";
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8' })
+      .split(/\r?\n/).filter(Boolean).map((dir) => path.join(dir, 'UWCheck.lnk'));
+  }
+  if (process.platform === 'darwin') return [path.join(home, 'Applications', 'UWCheck.app')];
+  return [path.join(home, '.local', 'share', 'applications', 'uwcheck.desktop')];
+}
+
+function installApp() {
+  if (/[\\/]_npx[\\/]/.test(ROOT)) {
+    console.log('npx runs UWCheck from a temporary folder, so a shortcut to it would break.\n'
+      + 'Install it first, then add the app:\n\n  npm install -g uwcheck\n  uwcheck --install');
+    process.exit(1);
+  }
+  const args = [__filename, '--app', ...(argValue('--port') ? ['--port', argValue('--port')] : [])];
+  const paths = shortcutPaths();
+  if (process.platform === 'win32') {
+    // Minimised window style keeps the launcher's console out of sight for the second it runs.
+    const ps = `$ws = New-Object -ComObject WScript.Shell
+foreach ($p in $env:UWC_PATHS.Split('|')) {
+  $s = $ws.CreateShortcut($p)
+  $s.TargetPath = $env:UWC_NODE
+  $s.Arguments = $env:UWC_ARGS
+  $s.IconLocation = $env:UWC_ICON
+  $s.WindowStyle = 7
+  $s.Description = 'UWCheck'
+  $s.Save()
+}`;
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        UWC_PATHS: paths.join('|'),
+        UWC_NODE: process.execPath,
+        UWC_ARGS: args.map((a) => `"${a}"`).join(' '),
+        UWC_ICON: path.join(ROOT, 'public', 'icon.ico'),
+      },
+    });
+  } else if (process.platform === 'darwin') {
+    const contents = path.join(paths[0], 'Contents');
+    fs.mkdirSync(path.join(contents, 'MacOS'), { recursive: true });
+    fs.mkdirSync(path.join(contents, 'Resources'), { recursive: true });
+    fs.writeFileSync(path.join(contents, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>UWCheck</string>
+  <key>CFBundleIdentifier</key><string>io.github.n473cl0.uwcheck</string>
+  <key>CFBundleExecutable</key><string>UWCheck</string>
+  <key>CFBundleIconFile</key><string>icon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>${pkg.version}</string>
+</dict></plist>
+`);
+    const quoted = [process.execPath, ...args].map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(' ');
+    fs.writeFileSync(path.join(contents, 'MacOS', 'UWCheck'), `#!/bin/sh\nexec ${quoted}\n`, { mode: 0o755 });
+    // Build the Dock icon with tools built into macOS; the app still works without it.
+    try {
+      const set = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'uwcheck-')), 'icon.iconset');
+      fs.mkdirSync(set);
+      for (const s of [16, 32, 128, 256, 512]) {
+        execFileSync('sips', ['-z', String(s), String(s), ICON_PNG, '--out', path.join(set, `icon_${s}x${s}.png`)], { stdio: 'ignore' });
+      }
+      execFileSync('iconutil', ['-c', 'icns', set, '-o', path.join(contents, 'Resources', 'icon.icns')], { stdio: 'ignore' });
+    } catch {}
+  } else {
+    fs.mkdirSync(path.dirname(paths[0]), { recursive: true });
+    fs.writeFileSync(paths[0], `[Desktop Entry]
+Type=Application
+Name=UWCheck
+Comment=One calendar for Canvas, Ed and UW course websites
+Exec=${[process.execPath, ...args].map((a) => `"${a}"`).join(' ')}
+Icon=${ICON_PNG}
+Terminal=false
+Categories=Office;Calendar;
+`);
+  }
+  console.log('Added the UWCheck app:');
+  for (const p of paths) console.log(`  ${p}`);
+  console.log('\nOpen it like any other app. It starts UWCheck in the background when needed.');
+}
+
+async function uninstallApp() {
+  for (const p of shortcutPaths()) fs.rmSync(p, { recursive: true, force: true });
+  await stopServer();
+  console.log(`Removed the UWCheck app. Your settings are still in ${DATA_DIR}`);
+}
+
 const HELP = `UWCheck ${pkg.version}: one calendar for Canvas, Ed and UW course websites
 
 Usage: uwcheck [options]
 
-  --port <n>   Port to listen on (default 7351, or $PORT)
-  --no-open    Don't open the browser
-  --version    Print the version
-  --help       Show this help
+  (no options)  Start UWCheck and open it in your browser
+  --install     Add a UWCheck app to your Start menu / Applications and desktop
+  --uninstall   Remove that app and stop UWCheck
+  --stop        Stop UWCheck if it's running in the background
+  --port <n>    Port to listen on (default 7351, or $PORT)
+  --no-open     Don't open the browser
+  --version     Print the version
+  --help        Show this help
 
 Your settings and ticks are stored in ${DATA_DIR}
 (set UWCHECK_DATA to use another folder).`;
 
-if (require.main === module) {
-  if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log(HELP);
-    process.exit(0);
-  }
-  if (process.argv.includes('--version') || process.argv.includes('-v')) {
-    console.log(pkg.version);
-    process.exit(0);
-  }
+function startServer() {
   const url = `http://localhost:${PORT}`;
   const shouldOpen = !process.argv.includes('--no-open');
   server.on('error', (err) => {
@@ -518,11 +682,23 @@ if (require.main === module) {
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`UWCheck running at ${url}  (Ctrl+C to stop)`);
     console.log(`Data folder: ${DATA_DIR}`);
+    console.log('Tip: run `uwcheck --install` to add a UWCheck app icon that starts everything for you.');
     if (shouldOpen) openBrowser(url);
     syncAll().catch((e) => console.error('Sync failed:', e.message));
     const every = Math.max(5, Number(config.autoSyncMinutes) || 30) * 60 * 1000;
     setInterval(() => syncAll().catch(() => {}), every);
   });
+}
+
+if (require.main === module) {
+  const flag = (...names) => names.some((n) => process.argv.includes(n));
+  if (flag('--help', '-h')) console.log(HELP);
+  else if (flag('--version', '-v')) console.log(pkg.version);
+  else if (flag('--install')) installApp();
+  else if (flag('--uninstall')) uninstallApp();
+  else if (flag('--stop')) stopServer().then((ok) => console.log(ok ? 'Stopped UWCheck.' : 'UWCheck is not running.'));
+  else if (flag('--app')) launchApp().then(() => process.exit(0));
+  else startServer();
 }
 
 module.exports = { parseCourseSite, parseIcs, zoned, kindOf, codeKey, courseFromCode };
