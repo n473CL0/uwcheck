@@ -1,0 +1,16 @@
+{
+  "name": "uwcheck",
+  "version": "1.0.0",
+  "description": "One calendar and to-do list for UW Canvas, Ed and CSE course-website deadlines.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js --open",
+    "serve": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["uw", "university-of-washington", "canvas", "edstem", "calendar", "dashboard"],
+  "license": "MIT",
+  "private": true
+}

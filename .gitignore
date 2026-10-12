@@ -1,0 +1,11 @@
+# Personal data: Canvas feed URL, Ed token, ticks and cached deadlines
+data/
+
+# Local backups and editor/agent tooling
+*.before-*.html
+.agents/
+.claude/
+skills-lock.json
+node_modules/
+.DS_Store
+Thumbs.db
