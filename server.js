@@ -362,6 +362,8 @@ function publicPayload() {
     sources,
     lastSync: cache.lastSync || null,
     config: publicConfig(),
+    version: pkg.version,
+    update: updateInfo(),
   };
 }
 
@@ -536,14 +538,18 @@ async function isRunning() {
   }
 }
 
+function spawnBackground(args) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const log = fs.openSync(path.join(DATA_DIR, 'server.log'), 'a');
+  spawn(process.execPath, [__filename, ...args], {
+    detached: true, stdio: ['ignore', log, log], windowsHide: true,
+  }).unref();
+}
+
 // What the app icon runs: start the server in the background if needed, then open the window.
 async function launchApp() {
   if (!(await isRunning())) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const log = fs.openSync(path.join(DATA_DIR, 'server.log'), 'a');
-    spawn(process.execPath, [__filename, '--no-open', '--port', String(PORT)], {
-      detached: true, stdio: ['ignore', log, log], windowsHide: true,
-    }).unref();
+    spawnBackground(['--no-open', '--background', '--port', String(PORT)]);
     for (let i = 0; i < 40 && !(await isRunning()); i++) await sleep(250);
   }
   openAppWindow(`http://localhost:${PORT}`);
@@ -651,6 +657,58 @@ async function uninstallApp() {
   console.log(`Removed the UWCheck app. Your settings are still in ${DATA_DIR}`);
 }
 
+// ---------- updates ----------
+
+const BACKGROUND = process.argv.includes('--background');
+// How this copy was installed decides how to update it.
+const UPDATE_COMMAND = /[\\/]_npx[\\/]/.test(ROOT) ? 'npx uwcheck@latest'
+  : /[\\/]node_modules[\\/]/.test(ROOT) ? 'npm install -g uwcheck@latest' : 'git pull';
+let latestVersion = null;
+
+function isNewer(a, b) {
+  const pa = a.split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+}
+
+async function checkForUpdate() {
+  if (process.env.UWCHECK_NO_UPDATE_CHECK) return;
+  try {
+    const res = await fetch('https://registry.npmjs.org/uwcheck/latest', { signal: AbortSignal.timeout(5000) });
+    if (res.ok) latestVersion = (await res.json()).version;
+  } catch {}
+}
+
+function updateInfo() {
+  if (!latestVersion || !isNewer(latestVersion, pkg.version)) return null;
+  return { latest: latestVersion, command: UPDATE_COMMAND, autoRestart: BACKGROUND };
+}
+
+// Once an update replaces these files, a background server restarts onto the new code;
+// one started from a terminal just says so.
+function watchForInstall() {
+  const timer = setInterval(() => {
+    let version;
+    try {
+      version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+    } catch {
+      return;
+    }
+    if (version === pkg.version) return;
+    clearInterval(timer);
+    if (!BACKGROUND) return console.log(`UWCheck ${version} is installed. Restart it to use the new version.`);
+    // Give npm a moment to finish writing the rest of the files.
+    setTimeout(() => {
+      server.close(() => {
+        spawnBackground(process.argv.slice(2));
+        process.exit(0);
+      });
+      server.closeAllConnections();
+    }, 10 * 1000);
+  }, 60 * 1000);
+}
+
 const HELP = `UWCheck ${pkg.version}: one calendar for Canvas, Ed and UW course websites
 
 Usage: uwcheck [options]
@@ -665,7 +723,8 @@ Usage: uwcheck [options]
   --help        Show this help
 
 Your settings and ticks are stored in ${DATA_DIR}
-(set UWCHECK_DATA to use another folder).`;
+(set UWCHECK_DATA to use another folder). UWCheck checks npm once a day for
+a newer version; set UWCHECK_NO_UPDATE_CHECK=1 to turn that off.`;
 
 function startServer() {
   const url = `http://localhost:${PORT}`;
@@ -687,6 +746,9 @@ function startServer() {
     syncAll().catch((e) => console.error('Sync failed:', e.message));
     const every = Math.max(5, Number(config.autoSyncMinutes) || 30) * 60 * 1000;
     setInterval(() => syncAll().catch(() => {}), every);
+    checkForUpdate();
+    setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+    watchForInstall();
   });
 }
 

@@ -125,6 +125,8 @@
   .pill.seed .dot { background: var(--warn); }
   .pill.error .dot { background: var(--danger); }
   .pill.error { color: var(--danger); }
+  .pill.update { color: var(--accent); }
+  .pill.update .dot { background: var(--accent); }
   .synced { margin-left: 4px; }
 
   /* layout */
@@ -501,7 +503,14 @@ async function api(path, body) {
   if (!res.ok) throw new Error(json.error || res.statusText);
   return json;
 }
-async function load() { data = await api('/api/data'); render(); }
+let serverVersion;
+async function load() {
+  data = await api('/api/data');
+  // The server restarts itself after an update; reload to pick up the new page too.
+  if (serverVersion && data.version !== serverVersion) return location.reload();
+  serverVersion = data.version;
+  render();
+}
 const isConnected = () => Boolean(data.config.canvasIcsUrl || data.config.hasEdToken || data.config.courseSites?.length);
 async function act(action) {
   try { data = await api('/api/state', action); render(); } catch (e) { toast(e.message); }
@@ -590,6 +599,19 @@ function renderSources() {
     t.className = 'synced';
     t.textContent = `Synced ${ago(data.lastSync)}`;
     box.append(t);
+  }
+  if (data.update) {
+    const { latest, command, autoRestart } = data.update;
+    const u = document.createElement('button');
+    u.className = 'pill update';
+    u.title = `UWCheck ${latest} is available. Click to copy the update command.`;
+    u.innerHTML = '<span class="dot"></span>';
+    u.append(`Update to ${latest}`);
+    u.onclick = async () => {
+      try { await navigator.clipboard.writeText(command); } catch {}
+      toast(`Copied "${command}". Run it in a terminal, ${autoRestart ? 'and UWCheck switches over within a minute.' : 'then restart UWCheck.'}`, 8000);
+    };
+    box.append(u);
   }
 }
 
@@ -1079,12 +1101,12 @@ $('setForm').addEventListener('submit', async (e) => {
 
 // ---------- misc ----------
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 2600) {
   const t = $('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
 async function sync() {
   const btn = $('syncBtn');

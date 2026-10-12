@@ -62,7 +62,7 @@ This adds **UWCheck** to your Start menu and desktop on Windows, to `~/Applicati
 |---|---|
 | `uwcheck --stop` | Stops the background server (the app icon starts it again). |
 | `uwcheck --uninstall` | Removes the app icon and stops UWCheck. Your settings are kept. |
-| `npm update -g uwcheck` | Updates to the latest version. |
+| `npm install -g uwcheck@latest` | Updates to the latest version. If UWCheck is running from the app icon, it switches to the new version by itself within a minute. |
 | `uwcheck --help` | Lists all options (`--port`, `--no-open`, ...). |
 
 ## Using it
@@ -106,6 +106,10 @@ Course websites ──┘   (Node, no dependencies)         (last good copy)    
 
 UWCheck listens only on `127.0.0.1`, so nothing else on your network can reach it, and it rejects requests from other websites. Your Canvas feed URL and Ed token are stored in plain text in `~/.uwcheck/config.json` and are sent only to Canvas and Ed. Treat that folder like a password and don't share it.
 
+## Updates
+
+When a new version is out, an **Update to x.y.z** button appears in the header. Click it to copy the update command, then paste it into a terminal. UWCheck checks npm once a day; set `UWCHECK_NO_UPDATE_CHECK=1` to turn that off.
+
 ## Running from source
 
 ```sh
@@ -114,7 +118,7 @@ cd uwcheck
 npm start
 ```
 
-On Windows you can also double-click **`Start Dashboard.bat`**. On macOS/Linux, run `./start.sh`.
+On Windows you can also double-click **`Start Dashboard.bat`**. On macOS/Linux, run `./start.sh`. Maintainers: see [RELEASING.md](RELEASING.md).
 
 ## License
 
