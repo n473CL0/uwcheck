@@ -1,15 +1,25 @@
+#!/usr/bin/env node
 // UWCheck: merges Canvas, Ed and course-website deadlines.
-// Zero dependencies: run with `node server.js` (Node 18+), then open http://localhost:7351
+// Zero dependencies: run `npx uwcheck` or `node server.js` (Node 18+), then open http://localhost:7351
 'use strict';
 
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { exec } = require('child_process');
 
-const PORT = Number(process.env.PORT) || 7351;
+const pkg = require('./package.json');
+
+function argValue(name) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+const PORT = Number(argValue('--port') || process.env.PORT) || 7351;
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+// Lives outside the install folder so npm updates never wipe your token and ticks.
+const DATA_DIR = process.env.UWCHECK_DATA || path.join(os.homedir(), '.uwcheck');
 const SEATTLE = 'America/Los_Angeles';
 
 const FILES = {
@@ -17,6 +27,16 @@ const FILES = {
   state: path.join(DATA_DIR, 'state.json'),
   cache: path.join(DATA_DIR, 'cache.json'),
 };
+
+// Earlier versions kept data in ./data next to the code; carry it over once.
+const LEGACY_DATA_DIR = path.join(ROOT, 'data');
+if (!fs.existsSync(DATA_DIR) && fs.existsSync(LEGACY_DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  for (const file of Object.values(FILES)) {
+    const old = path.join(LEGACY_DATA_DIR, path.basename(file));
+    if (fs.existsSync(old)) fs.copyFileSync(old, file);
+  }
+}
 
 const DEFAULT_CONFIG = {
   canvasIcsUrl: '',
@@ -423,12 +443,20 @@ function applyConfig(body) {
   writeJson(FILES.config, config);
 }
 
+const STATIC = {
+  '/': ['index.html', 'text/html; charset=utf-8'],
+  '/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
+  '/icon.svg': ['icon.svg', 'image/svg+xml'],
+  '/icon-192.png': ['icon-192.png', 'image/png'],
+  '/icon-512.png': ['icon-512.png', 'image/png'],
+};
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-      return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', 'index.html')), 'text/html; charset=utf-8');
-    }
+    const asset = req.method === 'GET' && STATIC[url.pathname];
+    if (asset) return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', asset[0])), asset[1]);
     if (req.method === 'GET' && url.pathname === '/api/data') return send(res, 200, publicPayload());
     if (req.method === 'POST' && url.pathname === '/api/sync') {
       await syncAll();
@@ -455,9 +483,29 @@ function openBrowser(url) {
   exec(cmd);
 }
 
+const HELP = `UWCheck ${pkg.version}: one calendar for Canvas, Ed and UW course websites
+
+Usage: uwcheck [options]
+
+  --port <n>   Port to listen on (default 7351, or $PORT)
+  --no-open    Don't open the browser
+  --version    Print the version
+  --help       Show this help
+
+Your settings and ticks are stored in ${DATA_DIR}
+(set UWCHECK_DATA to use another folder).`;
+
 if (require.main === module) {
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log(HELP);
+    process.exit(0);
+  }
+  if (process.argv.includes('--version') || process.argv.includes('-v')) {
+    console.log(pkg.version);
+    process.exit(0);
+  }
   const url = `http://localhost:${PORT}`;
-  const shouldOpen = process.argv.includes('--open');
+  const shouldOpen = !process.argv.includes('--no-open');
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.log(`UWCheck is already running at ${url}`);
@@ -469,6 +517,7 @@ if (require.main === module) {
   });
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`UWCheck running at ${url}  (Ctrl+C to stop)`);
+    console.log(`Data folder: ${DATA_DIR}`);
     if (shouldOpen) openBrowser(url);
     syncAll().catch((e) => console.error('Sync failed:', e.message));
     const every = Math.max(5, Number(config.autoSyncMinutes) || 30) * 60 * 1000;

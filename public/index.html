@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UWCheck</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 -6.755 41.65 41.65'><clipPath id='tick'><polygon points='20.82 14 30.4 14 30.4 -1 45 -1 45 30 20.8 30'/></clipPath><polygon points='30.6 0 30.6 5.15 34.26 5.15 30.28 20.11 25.35 0 20.27 0 14.86 20.27 10.97 5.15 14.94 5.15 14.94 0 0 0 0 5.15 3.26 5.15 8.98 28.14 17.01 28.14 20.82 13.75 24.48 28.14 32.51 28.14 38.55 5.15 41.65 5.15 41.65 0 30.6 0' fill='%234b2e83'/><polygon points='30.6 0 30.6 5.15 34.26 5.15 30.28 20.11 25.35 0 20.27 0 14.86 20.27 10.97 5.15 14.94 5.15 14.94 0 0 0 0 5.15 3.26 5.15 8.98 28.14 17.01 28.14 20.82 13.75 24.48 28.14 32.51 28.14 38.55 5.15 41.65 5.15 41.65 0 30.6 0' fill='%233f9a5c' clip-path='url(%23tick)'/></svg>">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#4b2e83">
 <script>
   // Theme: 'auto' follows the device; 'light' or 'dark' overrides it.
   (function () {
@@ -1158,7 +1161,7 @@ window.addEventListener('focus', () => load().catch(() => {}));
 setInterval(() => load().catch(() => {}), 5 * 60 * 1000);
 
 load().then(() => { if (!isConnected()) openSettings(); }).catch((e) => {
-  $('todo').innerHTML = '<div class="empty"><strong>Can\'t reach the dashboard server</strong><span>Start it with <b>Start Dashboard.bat</b> or <code>npm start</code>, then reload this page.</span></div>';
+  $('todo').innerHTML = '<div class="empty"><strong>Can\'t reach the dashboard server</strong><span>Start it again with <code>npx uwcheck</code>, then reload this page.</span></div>';
   console.error(e);
 });
 </script>

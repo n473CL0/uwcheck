@@ -2,15 +2,33 @@
   "name": "uwcheck",
   "version": "1.0.0",
   "description": "One calendar and to-do list for UW Canvas, Ed and CSE course-website deadlines.",
+  "author": "N473 RCL0U",
+  "license": "MIT",
+  "homepage": "https://github.com/n473CL0/uwcheck#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n473CL0/uwcheck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/n473CL0/uwcheck/issues"
+  },
+  "keywords": ["uw", "university-of-washington", "canvas", "edstem", "calendar", "dashboard", "deadlines"],
   "main": "server.js",
+  "bin": {
+    "uwcheck": "server.js"
+  },
+  "files": [
+    "server.js",
+    "public/index.html",
+    "public/manifest.webmanifest",
+    "public/icon.svg",
+    "public/icon-192.png",
+    "public/icon-512.png"
+  ],
   "scripts": {
-    "start": "node server.js --open",
-    "serve": "node server.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=18"
-  },
-  "keywords": ["uw", "university-of-washington", "canvas", "edstem", "calendar", "dashboard"],
-  "license": "MIT",
-  "private": true
+  }
 }

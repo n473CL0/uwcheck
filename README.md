@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="UWCheck logo" width="96">
+  <img src="public/icon.svg" alt="UWCheck logo" width="96">
 </p>
 
 <h1 align="center">UWCheck</h1>
@@ -28,16 +28,14 @@ At UW, deadlines are spread across Canvas, Ed lessons and course websites, and e
 - **Removes duplicates.** When a CSE course lists `HW4` on both Ed and its website, you see it once.
 - **Shows what's coming.** Work listed on the course website but not yet released on Ed appears as a dashed preview.
 - **Month and week views**, an overdue / today / upcoming to-do list, course colours, filters, your own deadlines, light and dark themes, and a Local / Seattle time-zone toggle.
-- **Private by design.** A small local server with no dependencies. Your tokens and ticks are stored only in `data/` on your computer and never leave it.
+- **Private by design.** A small local server with no dependencies. Your token and ticks are stored only on your computer.
 
 ## Quick start
 
-You need [Node.js](https://nodejs.org) 18 or newer (the LTS download is fine).
+You need [Node.js](https://nodejs.org) 18 or newer (the LTS download is fine). Then run one command:
 
 ```sh
-git clone https://github.com/n473CL0/uwcheck.git
-cd uwcheck
-npm start
+npx uwcheck
 ```
 
 Your browser opens at <http://localhost:7351>, along with **Settings**:
@@ -47,7 +45,14 @@ Your browser opens at <http://localhost:7351>, along with **Settings**:
 
 Click **Save & sync**. That's all the setup there is.
 
-> **No terminal?** On Windows, download the ZIP from GitHub, unzip it and double-click **`Start Dashboard.bat`**. On macOS/Linux, run `./start.sh`. Keep the window open while you use the dashboard, and close it to stop.
+Keep the terminal open while you use the dashboard, and press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop.
+
+### Install it as an app
+
+- **Command:** run `npm install -g uwcheck` once. After that, `uwcheck` starts it from any terminal, and `npm update -g uwcheck` updates it.
+- **Window and taskbar icon:** with UWCheck open in Chrome or Edge, click the install icon in the address bar. You can also use **⋮ → Cast, save and share → Install page as app** in Chrome, or **⋯ → Apps → Install this site as an app** in Edge. It then opens in its own window with no tabs and gets a Start-menu / Dock entry. The `uwcheck` command still has to be running for the app window to load.
+
+Run `uwcheck --help` for options (`--port`, `--no-open`).
 
 ## Using it
 
@@ -72,23 +77,33 @@ Under **Settings → Advanced**:
   `https://courses.cs.washington.edu/courses/cse351/26au/assignments.html = CSE 351`
 - **Canvas course names:** course names are read from the feed. To shorten one, add `canvas course id = name`.
 
-To use another port, set `PORT` before starting, for example `PORT=8080 npm start`.
+To use another port, run `uwcheck --port 8080`.
 
 ## How it works
 
 ```
 Canvas .ics feed ─┐
-Ed lessons API ───┼─▶ server.js ─▶ merge + dedupe ─▶ data/cache.json ─▶ public/index.html
+Ed lessons API ───┼─▶ server.js ─▶ merge + dedupe ─▶ ~/.uwcheck/     ─▶ public/index.html
 Course websites ──┘   (Node, no dependencies)         (last good copy)    (one-file UI)
 ```
 
 - **`server.js`** fetches each source, normalises course codes (`MATH/STAT 394 A` becomes `MATH 394`, `E E 201` becomes `EE 201`), handles Seattle time zones and daylight saving without any libraries, and serves a small JSON API.
 - **`public/index.html`** is the whole interface in one file: plain HTML, CSS and JavaScript, with no build step.
-- **`data/`** is created on first run and is git-ignored. It holds `config.json` (your feed URL and token), `state.json` (ticks, colours, custom tasks) and `cache.json`.
+- **`~/.uwcheck/`** (e.g. `C:Usersyou.uwcheck`) is created on first run, outside the install folder, so updates never wipe it. It holds `config.json` (your feed URL and token), `state.json` (ticks, colours, custom tasks) and `cache.json`. Set `UWCHECK_DATA` to use a different folder.
 
 ## Privacy
 
-UWCheck listens only on `127.0.0.1`, so nothing else on your network can reach it. Your Canvas feed URL and Ed token are stored in plain text in `data/config.json` and are sent only to Canvas and Ed. Treat that folder like a password: don't commit it or share it. The included `.gitignore` already excludes it.
+UWCheck listens only on `127.0.0.1`, so nothing else on your network can reach it. Your Canvas feed URL and Ed token are stored in plain text in `~/.uwcheck/config.json` and are sent only to Canvas and Ed. Treat that folder like a password and don't share it.
+
+## Running from source
+
+```sh
+git clone https://github.com/n473CL0/uwcheck.git
+cd uwcheck
+npm start
+```
+
+On Windows you can also double-click **`Start Dashboard.bat`**. On macOS/Linux, run `./start.sh`.
 
 ## License
 
