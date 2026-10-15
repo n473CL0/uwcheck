@@ -555,6 +555,52 @@ function openAppWindow(url) {
   const browser = appBrowser();
   if (!browser) return openBrowser(url);
   spawn(browser, [`--app=${url}`], { detached: true, stdio: 'ignore' }).unref();
+  if (process.platform === 'win32') tagAppWindow();
+}
+
+// The window belongs to Chrome, so pinning it to the taskbar would pin `chrome --app=...`, which
+// never starts the server. Retag it so the taskbar groups and pins it as this launcher instead.
+function tagAppWindow() {
+  const ps = `Add-Type @'
+using System; using System.Runtime.InteropServices;
+public static class UWCWindow {
+  [StructLayout(LayoutKind.Sequential)] struct PKey { public Guid f; public uint p; }
+  [StructLayout(LayoutKind.Sequential)] struct PropVar { public ushort vt, a, b, c; public IntPtr v, w; }
+  [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IPropertyStore { void GetCount(out uint n); void GetAt(uint i, out PKey k); void GetValue(ref PKey k, out PropVar v); void SetValue(ref PKey k, ref PropVar v); void Commit(); }
+  [DllImport("shell32.dll")] static extern int SHGetPropertyStoreForWindow(IntPtr h, ref Guid iid, out IPropertyStore s);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+  static void Set(IPropertyStore s, uint pid, string val) {
+    var k = new PKey { f = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), p = pid };
+    var v = new PropVar { vt = 31, v = Marshal.StringToCoTaskMemUni(val) };
+    s.SetValue(ref k, ref v);
+    Marshal.FreeCoTaskMem(v.v);
+  }
+  // System.AppUserModel.RelaunchCommand (2), RelaunchIconResource (3), RelaunchDisplayNameResource (4), ID (5)
+  public static void Tag(IntPtr h, string cmd, string icon) {
+    var iid = new Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"); IPropertyStore s;
+    Marshal.ThrowExceptionForHR(SHGetPropertyStoreForWindow(h, ref iid, out s));
+    Set(s, 2, cmd); Set(s, 3, icon); Set(s, 4, "UWCheck"); Set(s, 5, "N473CL0.UWCheck");
+  }
+}
+'@
+$h = [IntPtr]::Zero
+for ($i = 0; $i -lt 60 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 250; $h = [UWCWindow]::FindWindow('Chrome_WidgetWin_1', 'UWCheck') }
+if ($h -ne [IntPtr]::Zero) { [UWCWindow]::Tag($h, $env:UWC_CMD, $env:UWC_ICON) }`;
+  try {
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      stdio: 'ignore', timeout: 30000,
+      env: {
+        ...process.env,
+        UWC_CMD: [process.execPath, ...launcherArgs()].map((a) => `"${a}"`).join(' '),
+        UWC_ICON: path.join(ROOT, 'public', 'icon.ico'),
+      },
+    });
+  } catch {} // the window still works untagged; only pinning it is affected
+}
+
+function launcherArgs() {
+  return [__filename, '--app', ...(argValue('--port') ? ['--port', argValue('--port')] : [])];
 }
 
 async function isRunning() {
@@ -612,7 +658,7 @@ function installApp() {
       + 'Install it first, then add the app:\n\n  npm install -g uwcheck\n  uwcheck --install');
     process.exit(1);
   }
-  const args = [__filename, '--app', ...(argValue('--port') ? ['--port', argValue('--port')] : [])];
+  const args = launcherArgs();
   const paths = shortcutPaths();
   if (process.platform === 'win32') {
     // Minimised window style keeps the launcher's console out of sight for the second it runs.
