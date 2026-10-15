@@ -8,6 +8,8 @@
   <b>One calendar and to-do list for every UW deadline: Canvas, Ed and CSE course websites.</b>
 </p>
 
+<p align="center"><a href="https://n473cl0.github.io/uwcheck/">n473cl0.github.io/uwcheck</a></p>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
   <img alt="UWCheck showing a month calendar of deadlines next to a to-do list" src="docs/screenshot-light.png">
@@ -23,6 +25,8 @@
    ```
 
    If it asks `Ok to proceed?`, press <kbd>Enter</kbd>.
+
+   On Windows, if you see `running scripts is disabled on this system`, you're in PowerShell: type `npx.cmd` instead of `npx`, or open Command Prompt.
 
 3. UWCheck opens on **Settings**. Fill in:
    - **Canvas calendar feed URL:** in Canvas, open **Calendar**, click **Calendar Feed** (bottom right), and copy the link.

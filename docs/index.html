@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UWCheck</title>
+<meta name="description" content="One calendar and to-do list for every UW deadline: Canvas, Ed and CSE course websites.">
+<meta property="og:title" content="UWCheck">
+<meta property="og:description" content="One calendar and to-do list for every UW deadline: Canvas, Ed and CSE course websites.">
+<meta property="og:image" content="https://n473cl0.github.io/uwcheck/screenshot-light.png">
+<meta property="og:url" content="https://n473cl0.github.io/uwcheck/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#4b2e83">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/encode-sans.woff2" as="font" type="font/woff2" crossorigin>
+<script>document.documentElement.classList.add('js')</script>
+<style>
+  /* Same brand fonts and tokens as the app (public/index.html). Fonts: SIL OFL, see fonts/OFL.txt. */
+  @font-face { font-family: "Open Sans"; src: url(fonts/open-sans.woff2) format("woff2"); font-weight: 300 800; font-display: swap; }
+  @font-face { font-family: "Encode Sans"; src: url(fonts/encode-sans.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+  :root {
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --surface-2: #f0f0ec;
+    --border: #e5e5e0;
+    --text: #1f2328;
+    --muted: #5f636b;
+    --faint: #8f939b;
+    --accent: #4b2e83;      /* Husky Purple: brand, primary buttons */
+    --on-accent: #ffffff;
+    --green: #3f9a5c;       /* the logo's tick: highlights, progress, focus */
+    --green-fill: #2f7d49;  /* darker tick green, for white text on top */
+    --r-ctl: 8px;
+    --r-panel: 12px;
+    --shadow: 0 24px 48px -12px rgba(36, 40, 46, .18), 0 2px 6px rgba(36, 40, 46, .06);
+    --display: "Encode Sans", "Open Sans", system-ui, sans-serif;
+    --ease: cubic-bezier(.16, 1, .3, 1);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141517;
+      --surface: #1b1c1f;
+      --surface-2: #232428;
+      --border: #2f3135;
+      --text: #e9e9e6;
+      --muted: #a2a5ab;
+      --faint: #70747b;
+      --shadow: 0 24px 48px -12px rgba(0, 0, 0, .6), 0 2px 6px rgba(0, 0, 0, .3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.6 "Open Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    border-top: 3px solid var(--accent);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: color-mix(in srgb, var(--green) 32%, transparent); }
+  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--faint); transition: text-decoration-color .15s; }
+  a:hover { text-decoration-color: var(--green); }
+  :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 4px; }
+  h1, h2 { font-family: var(--display); font-weight: 700; letter-spacing: -.02em; margin: 0; }
+  h2 { font-size: 24px; line-height: 1.2; }
+  p { margin: 0; }
+  code { font: .92em ui-monospace, "Cascadia Code", Consolas, monospace; }
+  img { display: block; max-width: 100%; height: auto; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  @media (min-width: 768px) { .wrap { padding: 0 32px; } }
+  .muted { color: var(--muted); }
+
+  /* Radius rule from the app: controls 8px, panels 12px. */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-ctl);
+    padding: 8px 16px; font: inherit; font-size: 15px; line-height: 1.25; color: inherit; text-decoration: none;
+    cursor: pointer; white-space: nowrap; transition: background-color .15s, border-color .15s, transform .1s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--bg)); }
+  .btn.done, .btn.done:hover { background: var(--green-fill); border-color: var(--green-fill); }
+  .btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+  .hero { padding: 56px 0 40px; text-align: center; }
+  @media (min-width: 768px) { .hero { padding: 80px 0 56px; } }
+  .hero > img { width: 56px; height: 56px; margin: 0 auto 16px; }
+  h1 { font-size: clamp(48px, 8vw, 88px); line-height: 1; }
+  .lede { font: 600 clamp(24px, 3.4vw, 36px)/1.15 var(--display); letter-spacing: -.01em; margin-top: 12px; text-wrap: balance; }
+  .ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
+  .ctas .btn { padding: 10px 22px; font-size: 16px; }
+
+  .frame img { border-radius: var(--r-panel); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-shot img { animation: rise .8s var(--ease) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+  }
+
+  /* Feature tour. Step 0 is the hero screenshot; its empty .lead copy is only used by the merged effect below.
+     Phones and no-JS: the hero screenshot, then each feature's text and screenshot.
+     Desktop with JS: the hero screenshot spans the page, then feature screenshots share one sticky frame and
+     cross-fade as each feature's text crosses the middle of the screen. */
+  .step { margin-top: 64px; }
+  .step:first-child { margin-top: 0; }
+  .lead { display: none; }
+  .copy h2 { font-size: clamp(26px, 3.4vw, 34px); line-height: 1.12; text-wrap: balance; }
+  .copy p { color: var(--muted); font-size: 18px; margin-top: 12px; max-width: 36ch; }
+  .tour figure { margin: 24px 0 0; }
+  .tour .hero-shot { margin: 0 0 40px; }
+  @media (min-width: 900px) {
+    .js .tour {
+      display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); grid-template-rows: repeat(4, auto);
+      column-gap: 7%; --pin: max(32px, calc(50vh - 240px));
+    }
+    .js .step { display: contents; }
+    .js .copy {
+      grid-column: 1; grid-row: var(--row); min-height: 72vh;
+      display: flex; flex-direction: column; justify-content: center;
+      opacity: .45; transition: opacity .4s;
+    }
+    .js .tour figure {
+      grid-column: 2; grid-row: 2 / -1; align-self: start; margin: 0;
+      position: sticky; top: var(--pin);
+      opacity: 0; transform: scale(.97); transition: opacity .5s, transform .7s var(--ease);
+    }
+    .js .step.on .copy { opacity: 1; }
+    .js .step.on figure { opacity: 1; transform: none; }
+    .js .copy.lead { display: none; }
+    .js .tour .hero-shot { grid-column: 1 / -1; grid-row: 1; position: static; opacity: 1; transform: none; margin-bottom: 48px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .js .copy, .js .tour figure { transition: none; transform: none; }
+  }
+
+  /* Merged hero: the hero screenshot scrolls up at full width until it pins, then shrinks into the right column,
+     landing just as step 1 takes over and cross-fades in its screenshot. Delete this block to keep the plain full-width shot. */
+  @media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: scroll()) {
+      .js .tour { view-timeline: --tour; }
+      .js .copy.lead { display: flex; }
+      .js .tour figure, .js .tour .hero-shot { grid-row: 1 / -1; }
+      .js .tour .hero-shot {
+        grid-column: 2; position: sticky; margin: 0; opacity: 0; transform: scale(.97); transform-origin: top right;
+        animation: shrink linear both; animation-timeline: --tour;
+        /* "cover" offsets count from the tour's top at the bottom of the screen. It pins after 100vh - --pin of scrolling,
+           and step 1 takes over when its 72vh-tall text box, right below the lead, reaches mid-screen. */
+        animation-range: cover calc(100vh - var(--pin)) cover calc(100vh + 72vh - 50vh);
+      }
+      .js .step.on .hero-shot { opacity: 1; transform: none; }
+      /* 1.792 = page width / right column width = 1 / (0.93 * 0.6), from the 7% gap and 4fr/6fr columns. */
+      @keyframes shrink { from { scale: 1.792; } }
+    }
+  }
+
+  /* Privacy and install: heading in a narrow left column, content on the right. */
+  .split { display: grid; gap: 20px; padding: 96px 0 0; }
+  @media (min-width: 768px) { .split { grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr); gap: 32px; padding-top: 128px; } }
+  .split h2 { font-size: clamp(26px, 3.4vw, 34px); }
+  .split > :last-child { max-width: 640px; }
+  ol { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; gap: 24px; }
+  ol > li { counter-increment: step; display: grid; grid-template-columns: 32px minmax(0, 1fr); }
+  ol > li::before { content: counter(step); font: 700 20px/1.3 var(--display); color: var(--green); }
+  .after { margin-top: 28px; }
+
+  .cmd {
+    display: flex; align-items: center; gap: 8px; margin: 10px 0 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-ctl); padding: 6px 6px 6px 16px;
+  }
+  .cmd code { flex: 1; min-width: 0; font-size: 15px; line-height: 1.5; }
+  .cmd code span { white-space: nowrap; } /* never split the flag at its hyphens */
+
+  footer { margin-top: 96px; padding: 24px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="hero">
+    <img src="icon.svg" alt="" width="56" height="56">
+    <h1>UWCheck</h1>
+    <p class="lede">Every deadline in one place</p>
+    <div class="ctas">
+      <a class="btn primary" href="#install">Install</a>
+      <a class="btn" href="https://github.com/n473CL0/uwcheck">
+        <!-- mark-github-16 from GitHub's Octicons (MIT) -->
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+
+  <section class="tour" aria-label="Features">
+    <div class="step on" style="--row: 1">
+      <div class="copy lead"></div>
+      <figure class="frame hero-shot">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="shots/hero-dark.webp">
+          <img src="shots/hero-light.webp" alt="UWCheck showing a month calendar of deadlines next to a to-do list" width="1440" height="900" fetchpriority="high">
+        </picture>
+      </figure>
+    </div>
+    <div class="step" style="--row: 2">
+      <div class="copy">
+        <h2>A to-do list that writes itself</h2>
+        <p>Every open deadline from Canvas and Ed, sorted by when it's due. Tick things off as you go, or jump straight to the assignment.</p>
+      </div>
+      <figure class="frame">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="shots/todo-dark.webp">
+          <img src="shots/todo-light.webp" alt="The to-do panel: course filters, then deadlines grouped into Tomorrow and Next 7 days, each with a checkbox and a link to Ed or Canvas" width="1280" height="1024" loading="lazy" decoding="async">
+        </picture>
+      </figure>
+    </div>
+    <div class="step" style="--row: 3">
+      <div class="copy">
+        <h2>See homework before it's posted</h2>
+        <p>UWCheck also reads CSE course websites, so work shows up before it's released. A dashed outline means the date may still change.</p>
+      </div>
+      <figure class="frame">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="shots/early-dark.webp">
+          <img src="shots/early-light.webp" alt="Month view with dashed deadlines; one is open, reading: from the course website, not released yet, so the date may change" width="1280" height="1024" loading="lazy" decoding="async">
+        </picture>
+      </figure>
+    </div>
+    <div class="step" style="--row: 4">
+      <div class="copy">
+        <h2>Add your own deadlines</h2>
+        <p>Midterm review, a club meeting, anything that isn't on Canvas.</p>
+      </div>
+      <figure class="frame">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="shots/add-dark.webp">
+          <img src="shots/add-light.webp" alt="The Add a deadline form with title, course, date, time and link fields" width="1280" height="1024" loading="lazy" decoding="async">
+        </picture>
+      </figure>
+    </div>
+  </section>
+
+  <section class="split" id="privacy">
+    <h2>Private by design</h2>
+    <p class="muted">UWCheck runs entirely on your own computer. Your Canvas and Ed details are saved there and only ever sent to Canvas and Ed.</p>
+  </section>
+
+  <section class="split" id="install">
+    <h2>Install</h2>
+    <div>
+      <ol>
+        <li><span>Download and install <a href="https://nodejs.org">Node.js</a> (pick the LTS version). UWCheck needs it to run.</span></li>
+        <li>
+          <div>
+            Search the Start menu for <b>Command Prompt</b> (on a Mac, open <b>Terminal</b>), then paste this in and press Enter:
+            <div class="cmd">
+              <code id="cmd">npx uwcheck@latest <span>--install</span></code>
+              <button class="btn primary" id="copy" type="button">Copy</button>
+            </div>
+            <span class="muted">If it asks “Ok to proceed?”, press Enter again.</span>
+          </div>
+        </li>
+        <li>
+          <span>UWCheck opens on its <b>Settings</b> page. Paste in your Canvas calendar link (in Canvas, open Calendar and click Calendar Feed).
+          If you use Ed, also add an <a href="https://edstem.org/us/settings/api-tokens">Ed API token</a>. Then click <b>Save &amp; sync</b>.</span>
+        </li>
+      </ol>
+      <p class="muted after">After that, open UWCheck like any other app. To add course websites and more, see the <a href="https://github.com/n473CL0/uwcheck#readme">full guide</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="https://github.com/n473CL0/uwcheck/blob/main/LICENSE">MIT license</a>
+    <span>Not affiliated with the University of Washington, Instructure or Ed.</span>
+  </div>
+</footer>
+
+<script>
+  // Feature tour: the step whose text crosses the middle of the screen shows its screenshot.
+  const steps = [...document.querySelectorAll('.step')];
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) steps.forEach((s) => s.classList.toggle('on', s.contains(e.target)));
+    }
+  }, { rootMargin: '-50% 0px -50% 0px' });
+  steps.forEach((s) => io.observe(s.querySelector('.copy')));
+
+  const copy = document.getElementById('copy');
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('cmd').textContent);
+      copy.textContent = 'Copied';
+      copy.classList.add('done');
+    } catch {
+      // Clipboard blocked (e.g. non-HTTPS preview): select the text so Ctrl+C works.
+      getSelection().selectAllChildren(document.getElementById('cmd'));
+      copy.textContent = 'Press Ctrl+C';
+    }
+    setTimeout(() => { copy.textContent = 'Copy'; copy.classList.remove('done'); }, 2000);
+  });
+</script>
+</body>
+</html>
