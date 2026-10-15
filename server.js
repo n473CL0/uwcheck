@@ -527,6 +527,7 @@ function openBrowser(url) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ICON_PNG = path.join(ROOT, 'public', 'icon-512.png');
+const APP_DIR = path.join(DATA_DIR, 'app');
 
 // A Chromium browser can show the dashboard as its own app window, without tabs or an address bar.
 function appBrowser() {
@@ -644,7 +645,8 @@ async function stopServer() {
 function shortcutPaths() {
   const home = os.homedir();
   if (process.platform === 'win32') {
-    const ps = "[Environment]::GetFolderPath('Programs'); [Environment]::GetFolderPath('Desktop')";
+    // UTF-8 output, or a folder like C:\Users\José comes back mangled.
+    const ps = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; [Environment]::GetFolderPath('Programs'); [Environment]::GetFolderPath('Desktop')";
     return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8' })
       .split(/\r?\n/).filter(Boolean).map((dir) => path.join(dir, 'UWCheck.lnk'));
   }
@@ -652,11 +654,13 @@ function shortcutPaths() {
   return [path.join(home, '.local', 'share', 'applications', 'uwcheck.desktop')];
 }
 
-function installApp() {
+async function installApp() {
   if (/[\\/]_npx[\\/]/.test(ROOT)) {
-    console.log('npx runs UWCheck from a temporary folder, so a shortcut to it would break.\n'
-      + 'Install it first, then add the app:\n\n  npm install -g uwcheck\n  uwcheck --install');
-    process.exit(1);
+    // npm can clear npx's cache folder at any time, so the shortcut runs a copy kept next to the data.
+    // No global install, so no admin rights or PATH changes needed.
+    fs.cpSync(ROOT, APP_DIR, { recursive: true });
+    execFileSync(process.execPath, [path.join(APP_DIR, 'server.js'), ...process.argv.slice(2)], { stdio: 'inherit' });
+    return;
   }
   const args = launcherArgs();
   const paths = shortcutPaths();
@@ -723,6 +727,8 @@ Categories=Office;Calendar;
   console.log('Added the UWCheck app:');
   for (const p of paths) console.log(`  ${p}`);
   console.log('\nOpen it like any other app. It starts UWCheck in the background when needed.');
+  // Open it on a first install; an update leaves the window that's already open alone.
+  if (!(await isRunning())) await launchApp();
 }
 
 async function uninstallApp() {
@@ -736,6 +742,7 @@ async function uninstallApp() {
 const BACKGROUND = process.argv.includes('--background');
 // How this copy was installed decides how to update it.
 const UPDATE_COMMAND = /[\\/]_npx[\\/]/.test(ROOT) ? 'npx uwcheck@latest'
+  : ROOT === APP_DIR ? 'npx uwcheck@latest --install'
   : /[\\/]node_modules[\\/]/.test(ROOT) ? 'npm install -g uwcheck@latest' : 'git pull';
 let latestVersion = null;
 
@@ -788,7 +795,7 @@ const HELP = `UWCheck ${pkg.version}: one calendar for Canvas, Ed and UW course 
 Usage: uwcheck [options]
 
   (no options)  Start UWCheck and open it in your browser
-  --install     Add a UWCheck app to your Start menu / Applications and desktop
+  --install     Add a UWCheck app to your Start menu / Applications and desktop, and open it
   --uninstall   Remove that app and stop UWCheck
   --stop        Stop UWCheck if it's running in the background
   --port <n>    Port to listen on (default 7351, or $PORT)
@@ -818,7 +825,7 @@ function startServer() {
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`UWCheck running at ${url}  (Ctrl+C to stop)`);
     console.log(`Data folder: ${DATA_DIR}`);
-    console.log('Tip: run `uwcheck --install` to add a UWCheck app icon that starts everything for you.');
+    console.log('Tip: run `npx uwcheck@latest --install` to add a UWCheck app icon that starts everything for you.');
     if (shouldOpen) openBrowser(url);
     syncAll().catch((e) => console.error('Sync failed:', e.message));
     const every = Math.max(5, Number(config.autoSyncMinutes) || 30) * 60 * 1000;
@@ -833,7 +840,7 @@ if (require.main === module) {
   const flag = (...names) => names.some((n) => process.argv.includes(n));
   if (flag('--help', '-h')) console.log(HELP);
   else if (flag('--version', '-v')) console.log(pkg.version);
-  else if (flag('--install')) installApp();
+  else if (flag('--install')) installApp().then(() => process.exit(0));
   else if (flag('--uninstall')) uninstallApp();
   else if (flag('--stop')) stopServer().then((ok) => console.log(ok ? 'Stopped UWCheck.' : 'UWCheck is not running.'));
   else if (flag('--app')) launchApp().then(() => process.exit(0));

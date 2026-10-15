@@ -15,37 +15,28 @@
 
 ## Install
 
-1. Install [Node.js](https://nodejs.org) (the LTS download).
-2. Open a terminal and run:
+1. Install [Node.js](https://nodejs.org) (the LTS version).
+2. Open a **new** terminal window (on Windows, **Command Prompt**: PowerShell may refuse to run `npx`) and run:
 
    ```sh
-   npx uwcheck
+   npx uwcheck@latest --install
    ```
 
-3. Your browser opens at <http://localhost:7351> with **Settings**. Fill in:
+   If it asks `Ok to proceed?`, press <kbd>Enter</kbd>.
+
+3. UWCheck opens on **Settings**. Fill in:
    - **Canvas calendar feed URL:** in Canvas, open **Calendar**, click **Calendar Feed** (bottom right), and copy the link.
    - **Ed API token** *(optional)*: create one at [edstem.org → Settings → API Tokens](https://edstem.org/us/settings/api-tokens).
 4. Click **Save & sync**.
 
-Keep the terminal open while you use it. <kbd>Ctrl</kbd>+<kbd>C</kbd> stops it.
-
-### Or: install it as an app
-
-Get a clickable UWCheck icon (Start menu / desktop on Windows, `~/Applications` on macOS, app launcher on Linux) that runs in the background, no terminal needed:
-
-```sh
-npm install -g uwcheck
-uwcheck --install
-```
+That's it. From now on, open **UWCheck** like any other app: search for it in the Start menu, Spotlight or your app launcher (on Windows it's on your desktop too). It runs in the background, so you can close the terminal. When an update is out, an **Update** button appears in the header.
 
 | Command | What it does |
 |---|---|
-| `npm install -g uwcheck@latest` | Update. A running app switches to the new version within a minute. |
-| `uwcheck --stop` | Stop the background server. |
-| `uwcheck --uninstall` | Remove the app icon. Your settings are kept. |
-| `uwcheck --help` | All options (`--port`, `--no-open`, ...). |
-
-When an update is out, an **Update** button appears in the header.
+| `npx uwcheck@latest --install` | Run again if the app ever stops opening, for example after reinstalling Node.js. |
+| `npx uwcheck@latest --stop` | Stop the background server. |
+| `npx uwcheck@latest --uninstall` | Remove the app. Your settings are kept. |
+| `npx uwcheck@latest` | Use UWCheck without installing the app. Keep the terminal open while you do. |
 
 ## Optional: course websites
 
