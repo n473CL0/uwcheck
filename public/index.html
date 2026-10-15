@@ -181,7 +181,7 @@
   .chip.done .n { text-decoration: line-through; }
   .chip.tentative { background: transparent; outline: 1px dashed color-mix(in srgb, var(--c) 55%, transparent); outline-offset: -1px; }
   .chip, .more { flex: none; }
-  .chip[hidden], .more[hidden] { display: none; }
+  .chip[hidden], .more[hidden], .seg[hidden] { display: none; }
   .day { overflow: hidden; min-height: 0; }
   .more {
     border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600;
@@ -359,7 +359,7 @@
   <h1><img src="/icon.svg" alt="">UWCheck</h1>
   <div class="sources" id="sources"></div>
   <div class="spacer"></div>
-  <div class="seg" role="group" aria-label="Time zone">
+  <div class="seg" id="tzSwitch" role="group" aria-label="Time zone">
     <button id="tzLocal" title="Show times in this computer's time zone">Local</button>
     <button id="tzSea" title="Show times in Seattle (UW) time">Seattle</button>
   </div>
@@ -486,7 +486,7 @@ const KINDS = ['Homework', 'Lab', 'Reading', 'Lecture', 'Quiz', 'Exam', 'Assignm
 const SEATTLE = 'America/Los_Angeles';
 const $ = (id) => document.getElementById(id);
 
-let data = { items: [], state: { done: {}, colors: {}, custom: [] }, sources: {}, config: {} };
+let data = { items: [], state: { done: {}, colors: {} }, sources: {}, config: {} };
 const ui = loadUi();
 
 function loadUi() {
@@ -512,7 +512,7 @@ async function load() {
   serverVersion = data.version;
   render();
 }
-const isConnected = () => Boolean(data.config.canvasIcsUrl || data.config.hasEdToken || data.config.courseSites?.length);
+const isConnected = () => Object.values(data.sources).some((s) => s.status && s.status !== 'not-configured');
 async function act(action) {
   try { data = await api('/api/state', action); render(); } catch (e) { toast(e.message); }
 }
@@ -529,6 +529,22 @@ const dayDiff = (a, b) => Math.round((keyToUtc(a) - keyToUtc(b)) / 86400000);
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { timeZone: tz(), hour: '2-digit', minute: '2-digit' });
 function fmtDay(k, opts = { weekday: 'short', day: 'numeric', month: 'short' }) {
   return new Date(keyToUtc(k)).toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' });
+}
+// Copied from sources/common.js (tested there): wall-clock time in a named zone -> Date.
+function tzOffsetMs(ts, zone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(ts));
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ts / 1000) * 1000;
+}
+function zoned(y, mo, d, h, mi, zone) {
+  const wall = Date.UTC(y, mo - 1, d, h, mi);
+  let ts = wall - tzOffsetMs(wall, zone);
+  ts = wall - tzOffsetMs(ts, zone);
+  return new Date(ts);
 }
 
 // ---------- model ----------
@@ -554,6 +570,8 @@ function visible(it) {
   return true;
 }
 const byDue = (a, b) => a.due.localeCompare(b.due) || a.title.localeCompare(b.title);
+// Links come from outside sites: only link to web pages, never javascript: or other schemes.
+const hasWebUrl = (it) => /^https?:\/\//i.test(it.url || '');
 function shortName(it) {
   const m = it.title.match(/^([A-Za-z]{1,4}\d{1,3}[a-z]?):/);
   return m ? m[1] : it.title;
@@ -575,11 +593,10 @@ function render() {
 }
 
 function renderSources() {
-  const names = { canvas: 'Canvas', ed: 'Ed', site: 'Course site' };
   const box = $('sources');
   box.replaceChildren();
-  for (const [key, label] of Object.entries(names)) {
-    const s = data.sources[key] || {};
+  for (const s of Object.values(data.sources)) {
+    const label = s.label;
     const b = document.createElement('button');
     let cls = '', tip = '';
     if (s.status === 'ok') { cls = 'ok'; tip = `${s.count} items · synced ${ago(s.syncedAt)}`; }
@@ -920,13 +937,13 @@ function row(it, today) {
     t.title = 'Listed on the course website but not published yet, so the date may change';
     meta.append(t);
   }
-  if (it.url) {
+  if (hasWebUrl(it)) {
     const a = document.createElement('a');
     a.className = 'open';
     a.href = it.url;
     a.target = '_blank';
     a.rel = 'noopener';
-    a.textContent = { canvas: 'Canvas ↗', ed: 'Ed ↗', site: 'Course site ↗' }[it.source] || 'Open ↗';
+    a.textContent = `${data.sources[it.source]?.label || 'Open'} ↗`;
     meta.append(a);
   }
   mid.append(title, meta);
@@ -970,7 +987,7 @@ function showPop(it, anchor, back) {
   const lines = [
     `${it.course} · ${it.kind}`,
     `Due ${fmtDay(k, { weekday: 'long', day: 'numeric', month: 'long' })}${it.allDay ? '' : ' at ' + fmtTime(it.due)}${ui.tz === 'seattle' ? ' (Seattle)' : ''}`,
-    { canvas: 'From Canvas', ed: 'From Ed', site: 'From the course website', custom: 'Added by you' }[it.source],
+    it.source === 'custom' ? 'Added by you' : `From ${data.sources[it.source]?.label || it.source}`,
   ];
   if (it.tentative) lines.push('Not released yet, so the date may change');
   lines.forEach((l, i) => {
@@ -986,7 +1003,7 @@ function showPop(it, anchor, back) {
   tg.textContent = done ? 'Mark not done' : 'Mark done';
   tg.onclick = () => { hidePop(); act({ type: 'done', id: it.id, value: !done }); };
   actions.append(tg);
-  if (it.url) {
+  if (hasWebUrl(it)) {
     const a = document.createElement('a');
     a.className = 'btn';
     a.href = it.url;
@@ -1058,7 +1075,8 @@ $('addDlg').addEventListener('close', () => {
   let due, allDay = false;
   if (time) {
     const [h, mi] = time.split(':').map(Number);
-    due = new Date(y, mo - 1, d, h, mi).toISOString();
+    // Read the time in the zone the page is showing, like the date already is.
+    due = (ui.tz === 'seattle' ? zoned(y, mo, d, h, mi, SEATTLE) : new Date(y, mo - 1, d, h, mi)).toISOString();
   } else {
     due = new Date(Date.UTC(y, mo - 1, d, 12)).toISOString();
     allDay = true;
@@ -1169,6 +1187,11 @@ $('todayBtn').onclick = () => { ui.view = null; render(); };
 $('syncBtn').onclick = sync;
 $('settingsBtn').onclick = openSettings;
 $('addBtn').onclick = () => openAdd();
+// On a computer already set to Seattle time both choices show the same thing, so hide the switch.
+if (Intl.DateTimeFormat().resolvedOptions().timeZone === SEATTLE) {
+  ui.tz = 'local';
+  $('tzSwitch').hidden = true;
+}
 $('tzLocal').onclick = () => { ui.tz = 'local'; saveUi(); render(); };
 $('tzSea').onclick = () => { ui.tz = 'seattle'; saveUi(); render(); };
 // Same rule as the script in <head>; this one also follows the device when it switches.

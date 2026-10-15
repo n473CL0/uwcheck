@@ -10,6 +10,12 @@ const path = require('path');
 const { exec, execFileSync, spawn } = require('child_process');
 
 const pkg = require('./package.json');
+const { codeKey, courseFromCode } = require('./sources/common');
+
+// Each data source is one file in sources/. To add one, see CONTRIBUTING.md.
+const SOURCES = [require('./sources/canvas'), require('./sources/ed'), require('./sources/site')];
+const SOURCE_CONFIG = Object.assign({}, ...SOURCES.map((s) => s.config));
+const SECRETS = new Set(SOURCES.flatMap((s) => s.secrets));
 
 function argValue(name) {
   const i = process.argv.indexOf(name);
@@ -20,9 +26,6 @@ const PORT = Number(argValue('--port') || process.env.PORT) || 7351;
 const ROOT = __dirname;
 // Lives outside the install folder so npm updates never wipe your token and ticks.
 const DATA_DIR = process.env.UWCHECK_DATA || path.join(os.homedir(), '.uwcheck');
-const SEATTLE = 'America/Los_Angeles';
-// Without this, a source that stops answering holds up every sync for minutes.
-const FETCH_TIMEOUT_MS = 20 * 1000;
 
 const FILES = {
   config: path.join(DATA_DIR, 'config.json'),
@@ -30,25 +33,7 @@ const FILES = {
   cache: path.join(DATA_DIR, 'cache.json'),
 };
 
-// Earlier versions kept data in ./data next to the code; carry it over once.
-const LEGACY_DATA_DIR = path.join(ROOT, 'data');
-if (!fs.existsSync(DATA_DIR) && fs.existsSync(LEGACY_DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  for (const file of Object.values(FILES)) {
-    const old = path.join(LEGACY_DATA_DIR, path.basename(file));
-    if (fs.existsSync(old)) fs.copyFileSync(old, file);
-  }
-}
-
-const DEFAULT_CONFIG = {
-  canvasIcsUrl: '',
-  edToken: '',
-  edRegion: 'us',
-  edCourses: [], // empty = every active course on your Ed account
-  courseSites: [], // optional UW CSE "assignments.html" pages: { url, course }
-  canvasCourses: {}, // optional rename: { canvasCourseId: 'Short name' }
-  autoSyncMinutes: 30,
-};
+const DEFAULT_CONFIG = { ...SOURCE_CONFIG, autoSyncMinutes: 30 };
 
 const DEFAULT_STATE = { done: {}, colors: {}, custom: [] };
 
@@ -71,7 +56,8 @@ function readJson(file, fallback) {
 function writeJson(file, value) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  // Only you can read it: config.json holds the Ed token. The tmp file is new each time, so the mode always applies.
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, file);
 }
 
@@ -80,273 +66,19 @@ let state = { ...DEFAULT_STATE, ...readJson(FILES.state, {}) };
 // cache = last good result per source, so the dashboard still works offline.
 let cache = readJson(FILES.cache, { sources: {} });
 
-// ---------- time helpers ----------
-
-function tzOffsetMs(ts, tz) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hourCycle: 'h23',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(ts));
-  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
-  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ts / 1000) * 1000;
-}
-
-// Wall-clock time in a named zone -> Date.
-function zoned(y, mo, d, h, mi, tz) {
-  const wall = Date.UTC(y, mo - 1, d, h, mi);
-  let ts = wall - tzOffsetMs(wall, tz);
-  ts = wall - tzOffsetMs(ts, tz);
-  return new Date(ts);
-}
-
-// All-day items are pinned to noon UTC so they land on the same date in every US zone.
-function allDayIso(y, mo, d) {
-  return new Date(Date.UTC(y, mo - 1, d, 12)).toISOString();
-}
-
-// ---------- classification ----------
-
-function kindOf(title, fallback = 'Assignment') {
-  const t = title.trim();
-  if (/^RD\s*\d/i.test(t) || /reading/i.test(t)) return 'Reading';
-  if (/^LC\s*\d/i.test(t) || /lecture/i.test(t)) return 'Lecture';
-  if (/^(LB|Lab)\s*\d/i.test(t) || /\blab\b/i.test(t)) return 'Lab';
-  if (/^HW\s*\d/i.test(t) || /homework|problem set|pset/i.test(t)) return 'Homework';
-  if (/quiz/i.test(t)) return 'Quiz';
-  if (/midterm|final exam|\bexam\b/i.test(t)) return 'Exam';
-  if (/survey|feedback/i.test(t)) return 'Survey';
-  return fallback;
-}
-
-// "HW04: …", "HW4 Due", "LB1a", "Lab1a" -> "HW4" / "LAB1a"; used to dedupe Ed vs the course site.
-function codeKey(title) {
-  const m = title.match(/^(RD|LC|HW|LB|Lab|SC)\s*(\d+)([a-z]?)\b/i);
-  if (!m) return '';
-  let prefix = m[1].toUpperCase();
-  if (prefix === 'LB') prefix = 'LAB';
-  return prefix + parseInt(m[2], 10) + m[3].toLowerCase();
-}
-
-function courseFromCode(raw) {
-  const m = raw.match(/\b([A-Z]{1,6}(?:[ /][A-Z]{1,6})*)\s?(\d{3})\b/);
-  if (!m) return raw.trim();
-  const dept = m[1].replace(/^([A-Z]) ([A-Z])$/, '$1$2').replace(/^MATH\/STAT$/, 'MATH');
-  return `${dept} ${m[2]}`;
-}
-
-// ---------- source: Canvas calendar feed (.ics) ----------
-
-function parseIcs(text) {
-  const lines = text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
-  const events = [];
-  let cur = null;
-  for (const line of lines) {
-    if (line === 'BEGIN:VEVENT') cur = {};
-    else if (line === 'END:VEVENT') {
-      if (cur) events.push(cur);
-      cur = null;
-    } else if (cur) {
-      const i = line.indexOf(':');
-      if (i < 0) continue;
-      const [name, ...params] = line.slice(0, i).split(';');
-      cur[name.toUpperCase()] = {
-        value: line.slice(i + 1),
-        params: Object.fromEntries(params.map((p) => {
-          const [k, v = ''] = p.split('=');
-          return [k.toUpperCase(), v.replace(/^"|"$/g, '')];
-        })),
-      };
-    }
-  }
-  return events;
-}
-
-function icsText(v) {
-  return (v || '').replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1');
-}
-
-function icsDate(prop) {
-  if (!prop) return null;
-  const v = prop.value;
-  let m = v.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (m) return { due: allDayIso(+m[1], +m[2], +m[3]), allDay: true };
-  m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
-  if (!m) return null;
-  const [y, mo, d, h, mi, s] = m.slice(1, 7).map(Number);
-  if (m[7]) return { due: new Date(Date.UTC(y, mo - 1, d, h, mi, s)).toISOString() };
-  return { due: zoned(y, mo, d, h, mi, prop.params.TZID || SEATTLE).toISOString() };
-}
-
-async function fetchCanvas() {
-  const url = config.canvasIcsUrl.trim();
-  if (!url) return null;
-  const res = await fetch(url, { headers: { Accept: 'text/calendar' }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Canvas feed returned HTTP ${res.status}`);
-  const text = await res.text();
-  if (!text.includes('BEGIN:VCALENDAR')) throw new Error('That URL is not a calendar feed');
-  const canvasOrigin = new URL(url).origin;
-  const items = [];
-  for (const ev of parseIcs(text)) {
-    const when = icsDate(ev.DTSTART);
-    if (!when) continue;
-    const uid = (ev.UID?.value || '').replace(/^event-/, '');
-    const rawSummary = icsText(ev.SUMMARY?.value);
-    const bracket = rawSummary.match(/\s*\[([^\]]+)\]\s*$/);
-    const title = bracket ? rawSummary.slice(0, bracket.index) : rawSummary;
-    const link = ev.URL?.value || '';
-    const courseId = (link.match(/course_(\d+)/) || link.match(/courses\/(\d+)/) || [])[1];
-    const course = config.canvasCourses[courseId] || (bracket ? courseFromCode(bracket[1]) : 'Canvas');
-    const isAssignment = /assignment/.test(uid);
-    let url2 = link;
-    const a = uid.match(/assignment-(\d+)$/);
-    if (a && courseId) url2 = `${canvasOrigin}/courses/${courseId}/assignments/${a[1]}`;
-    items.push({
-      id: 'canvas:' + uid,
-      source: 'canvas',
-      course,
-      title,
-      kind: isAssignment ? kindOf(title) : 'Event',
-      ...when,
-      url: url2,
-    });
-  }
-  return items;
-}
-
-// ---------- source: Ed lessons API ----------
-
-// With no courses configured, use every active course on the account ("CSE 351 - 26au" -> "CSE 351").
-async function edCourseList(region, headers) {
-  if (config.edCourses.length) return config.edCourses;
-  const res = await fetch(`https://${region}.edstem.org/api/user`, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (res.status === 401 || res.status === 403) throw new Error('Ed rejected the API token');
-  if (!res.ok) throw new Error(`Ed returned HTTP ${res.status}`);
-  const body = await res.json();
-  return (body.courses || [])
-    .filter((c) => c.course?.status === 'active')
-    .map((c) => ({ id: c.course.id, course: courseFromCode(c.course.code || c.course.name || String(c.course.id)) }));
-}
-
-async function fetchEd() {
-  const token = config.edToken.trim();
-  if (!token) return null;
-  const region = config.edRegion || 'us';
-  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
-  return fetchEach('ed', await edCourseList(region, headers), async ({ id: courseId, course }) => {
-    const res = await fetch(`https://${region}.edstem.org/api/courses/${courseId}/lessons`, {
-      headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (res.status === 401) throw new Error('Ed rejected the API token');
-    if (!res.ok) throw new Error(`Ed course ${courseId} returned HTTP ${res.status}`);
-    const body = await res.json();
-    const items = [];
-    const modules = Object.fromEntries((body.modules || []).map((m) => [m.id, m.name || '']));
-    for (const l of body.lessons || []) {
-      if (!l.due_at) continue;
-      const status = String(l.status || l.attempt_status || '').toLowerCase();
-      const mod = modules[l.module_id] || '';
-      const fallback = /lab/i.test(mod) ? 'Lab' : /read/i.test(mod) ? 'Reading'
-        : /lecture/i.test(mod) ? 'Lecture' : /homework/i.test(mod) ? 'Homework' : 'Assignment';
-      items.push({
-        id: `ed:${l.id}`,
-        source: 'ed',
-        course,
-        title: l.title,
-        kind: kindOf(l.title, fallback),
-        due: new Date(l.due_at).toISOString(),
-        url: `https://edstem.org/${region}/courses/${courseId}/lessons/${l.id}`,
-        completed: status === 'completed',
-      });
-    }
-    return items;
-  });
-}
-
-// ---------- source: UW CSE course website (assignments.html template) ----------
-
-const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-
-function decodeEntities(s) {
-  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
-}
-
-function parseCourseSite(html, pageUrl, course) {
-  const q = pageUrl.match(/\/(\d{2})(wi|sp|su|au)\b/);
-  const year = q ? 2000 + Number(q[1]) : new Date().getFullYear();
-  const items = [];
-  // The raw page omits </td> after the date, so match loosely up to </tr>.
-  const rowRe = /<tr>\s*<td>\s*\w{3},\s*(\w{3})\s+(\d{1,2})\s*(?:<\/td>)?\s*<td>([\s\S]*?)<\/tr>/g;
-  for (const row of html.matchAll(rowRe)) {
-    const month = MONTHS[row[1].toLowerCase()];
-    const day = Number(row[2]);
-    if (!month) continue;
-    for (const a of row[3].matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)) {
-      const attrs = a[1];
-      const title = decodeEntities(a[2].replace(/<[^>]+>/g, '')).replace(/\s+Due\s*$/i, '').trim();
-      const href = (attrs.match(/href="([^"]*)"/) || [])[1] || '';
-      if (/canvas\.uw\.edu/.test(href)) continue; // Canvas feed covers these
-      const kind = kindOf(title);
-      // Readings/lectures are due 11am Seattle; everything else 11:59pm.
-      const [h, mi] = kind === 'Reading' || kind === 'Lecture' ? [11, 0] : [23, 59];
-      items.push({
-        id: `site:${course}:${codeKey(title) || title}`,
-        source: 'site',
-        course,
-        title,
-        kind,
-        due: zoned(year, month, day, h, mi, SEATTLE).toISOString(),
-        url: href ? new URL(decodeEntities(href), pageUrl).href : pageUrl,
-        tentative: /\bdisabled\b/.test(attrs) || !href,
-      });
-    }
-  }
-  return items;
-}
-
-async function fetchSites() {
-  if (!config.courseSites.length) return null;
-  return fetchEach('site', config.courseSites, async ({ url, course }) => {
-    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    if (!res.ok) throw new Error(`${url} returned HTTP ${res.status}`);
-    const found = parseCourseSite(await res.text(), url, course);
-    if (!found.length) throw new Error(`No deadlines found on ${url}`);
-    return found;
-  });
-}
-
 // ---------- sync + merge ----------
 
-// Fetches each Ed course or course site on its own, so one bad one doesn't freeze the rest.
-// A failed one keeps its last good items; the error carries the combined items to syncAll.
-async function fetchEach(source, parts, fetchPart) {
-  const prev = cache.sources?.[source]?.items || [];
-  const items = [];
-  const errors = new Set();
-  await Promise.all(parts.map(async (part) => {
-    try {
-      items.push(...await fetchPart(part));
-    } catch (err) {
-      errors.add(err.message);
-      items.push(...prev.filter((i) => i.course === part.course));
-    }
-  }));
-  if (errors.size) throw Object.assign(new Error([...errors].join('; ')), { items });
-  return items;
-}
-
-const SOURCES = { canvas: fetchCanvas, ed: fetchEd, site: fetchSites };
 let syncing = null;
 
 async function syncAll() {
   if (syncing) return syncing;
   syncing = (async () => {
     cache.sources ||= {};
-    await Promise.all(Object.entries(SOURCES).map(async ([name, fn]) => {
+    await Promise.all(SOURCES.map(async (source) => {
+      const { name } = source;
       const prev = cache.sources[name] || { items: [] };
       try {
-        const items = await fn();
+        const items = await source.fetch(config, prev.items);
         if (items === null) {
           cache.sources[name] = { items: [], status: 'not-configured', error: null };
         } else {
@@ -369,20 +101,22 @@ async function syncAll() {
 function mergedItems(src = cache.sources || {}, custom = state.custom) {
   // Compare cleaned-up course codes, so a site named "CSE351" still matches "CSE 351" from Ed.
   const key = (i) => `${courseFromCode(i.course.toUpperCase())}|${codeKey(i.title)}`;
-  const ed = src.ed?.items || [];
-  const edKeys = new Set(ed.map(key));
-  const site = (src.site?.items || []).filter((i) => !codeKey(i.title) || !edKeys.has(key(i)));
-  return [...(src.canvas?.items || []), ...ed, ...site, ...custom];
+  const edKeys = new Set((src.ed?.items || []).map(key));
+  // Course sites list work before Ed releases it; once Ed has it, show only Ed's copy.
+  const items = SOURCES.flatMap(({ name }) => (src[name]?.items || [])
+    .filter((i) => name !== 'site' || !codeKey(i.title) || !edKeys.has(key(i))));
+  return [...items, ...custom];
 }
 
 function publicPayload() {
   const sources = {};
-  for (const [name, s] of Object.entries(cache.sources || {})) {
-    sources[name] = { status: s.status, error: s.error, syncedAt: s.syncedAt, count: s.items?.length || 0 };
+  for (const { name, label } of SOURCES) {
+    const s = cache.sources?.[name] || {};
+    sources[name] = { label, status: s.status, error: s.error, syncedAt: s.syncedAt, count: s.items?.length || 0 };
   }
   return {
     items: mergedItems(),
-    state,
+    state: { done: state.done, colors: state.colors }, // custom items are already in items
     sources,
     lastSync: cache.lastSync || null,
     config: publicConfig(),
@@ -391,9 +125,16 @@ function publicPayload() {
   };
 }
 
+const capitalized = (key) => key[0].toUpperCase() + key.slice(1);
+
+// Secrets never reach the page; it only learns whether each is set (edToken -> hasEdToken).
 function publicConfig() {
-  const { edToken, ...rest } = config;
-  return { ...rest, hasEdToken: Boolean(edToken) };
+  const pub = { ...config };
+  for (const key of SECRETS) {
+    delete pub[key];
+    pub['has' + capitalized(key)] = Boolean(config[key]);
+  }
+  return pub;
 }
 
 // ---------- HTTP ----------
@@ -417,6 +158,9 @@ function readBody(req) {
         reject(e);
       }
     });
+    // A request the browser cancels never ends; without these the handler would wait forever.
+    req.on('error', reject);
+    req.on('close', () => { if (!req.complete) reject(new Error('Request cancelled')); });
   });
 }
 
@@ -457,14 +201,17 @@ function applyStateAction(a) {
   writeJson(FILES.state, state);
 }
 
+// Takes only settings a source declares, and only with the same type as its default.
 function applyConfig(body) {
   const next = { ...config };
-  if (typeof body.canvasIcsUrl === 'string') next.canvasIcsUrl = body.canvasIcsUrl.trim();
-  if (typeof body.edToken === 'string' && body.edToken.trim()) next.edToken = body.edToken.trim();
-  if (body.clearEdToken) next.edToken = '';
-  if (Array.isArray(body.edCourses)) next.edCourses = body.edCourses;
-  if (Array.isArray(body.courseSites)) next.courseSites = body.courseSites;
-  if (body.canvasCourses && typeof body.canvasCourses === 'object') next.canvasCourses = body.canvasCourses;
+  for (const [key, def] of Object.entries(SOURCE_CONFIG)) {
+    const v = body[key];
+    if (v == null || typeof v !== typeof def || Array.isArray(v) !== Array.isArray(def)) continue;
+    const value = typeof v === 'string' ? v.trim() : v;
+    // A blank secret means "keep the saved one"; removing it is the clear<Key> flag.
+    if (!(SECRETS.has(key) && !value)) next[key] = value;
+  }
+  for (const key of SECRETS) if (body['clear' + capitalized(key)]) next[key] = '';
   config = next;
   writeJson(FILES.config, config);
 }
@@ -847,4 +594,4 @@ if (require.main === module) {
   else startServer();
 }
 
-module.exports = { parseCourseSite, parseIcs, icsDate, zoned, kindOf, codeKey, courseFromCode, mergedItems };
+module.exports = { mergedItems, SOURCES, applyConfig, publicConfig, FILES };

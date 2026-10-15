@@ -64,6 +64,10 @@ cd uwcheck
 npm start
 ```
 
+## Contributing
+
+Want UWCheck to read deadlines from another tool your courses use? Each source is one small file. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 [MIT](LICENSE). Bundled fonts are under the [SIL Open Font License](public/fonts/OFL.txt). Not affiliated with the University of Washington, Instructure or Ed.

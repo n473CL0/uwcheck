@@ -1,0 +1,4 @@
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/n473CL0/uwcheck/security/advisories/new
+    about: Please report security problems privately, not as a public issue.

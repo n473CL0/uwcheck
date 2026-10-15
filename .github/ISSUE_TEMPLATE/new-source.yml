@@ -1,0 +1,41 @@
+name: New data source
+description: Suggest (or offer to build) another place UW courses post deadlines
+labels: [new source]
+body:
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      description: For example Gradescope, PrairieLearn, or a department's course pages.
+    validations:
+      required: true
+  - type: input
+    id: courses
+    attributes:
+      label: Which UW courses use it?
+      placeholder: CSE 332, STAT 311
+    validations:
+      required: true
+  - type: dropdown
+    id: access
+    attributes:
+      label: How can a student get their deadlines out of it?
+      description: UWCheck can't use NetID passwords or browser cookies (see CONTRIBUTING.md).
+      options:
+        - Calendar feed (.ics) link
+        - API with a personal token
+        - Public web page
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample
+      description: A link to a public page, or a short sample of the feed or API response. Replace names, IDs and tokens first.
+  - type: checkboxes
+    id: build
+    attributes:
+      label: Building it
+      options:
+        - label: I'd like to build this myself
