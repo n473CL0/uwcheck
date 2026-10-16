@@ -43,9 +43,22 @@ function parseCourseSite(html, pageUrl, course) {
   return items;
 }
 
+// For a site listed without a name: ".../courses/cse351/26au/assignments.html" -> "CSE 351".
+function courseFromUrl(url) {
+  try {
+    const { hostname, pathname } = new URL(url);
+    const m = pathname.match(/\/([a-z]{2,6})(\d{3})[a-z]?\//i);
+    return m ? `${m[1].toUpperCase()} ${m[2]}` : hostname;
+  } catch {
+    return url;
+  }
+}
+
 async function fetchSites(config, prev) {
   if (!config.courseSites.length) return null;
-  return fetchEach(prev, config.courseSites, async ({ url, course }) => {
+  // A name that's just the URL is how older versions saved a site listed without one.
+  const sites = config.courseSites.map(({ url, course }) => ({ url, course: course && course !== url ? course : courseFromUrl(url) }));
+  return fetchEach(prev, sites, async ({ url, course }) => {
     const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`${url} returned HTTP ${res.status}`);
     const found = parseCourseSite(await res.text(), url, course);
@@ -61,4 +74,5 @@ module.exports = {
   secrets: [],
   fetch: fetchSites,
   parseCourseSite,
+  courseFromUrl,
 };

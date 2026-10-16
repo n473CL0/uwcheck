@@ -25,3 +25,15 @@ jobs:
 
       - run: node server.js --version
       - run: npm test
+
+  # Clicks through the page in headless Chrome (the runner has it installed).
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - run: npm run smoke

@@ -4,15 +4,22 @@
 const { FETCH_TIMEOUT_MS, kindOf, courseFromCode, fetchEach } = require('./common');
 
 // With no courses configured, use every active course on the account ("CSE 351 - 26au" -> "CSE 351").
+// Courses listed by id alone get their name from the account too. (Older versions saved those with
+// the id as the name.)
 async function edCourseList(config, region, headers) {
-  if (config.edCourses.length) return config.edCourses;
+  const named = (c) => c.course && c.course !== String(c.id);
+  if (config.edCourses.length && config.edCourses.every(named)) return config.edCourses;
   const res = await fetch(`https://${region}.edstem.org/api/user`, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (res.status === 401 || res.status === 403) throw new Error('Ed rejected the API token');
   if (!res.ok) throw new Error(`Ed returned HTTP ${res.status}`);
   const body = await res.json();
-  return (body.courses || [])
-    .filter((c) => c.course?.status === 'active')
-    .map((c) => ({ id: c.course.id, course: courseFromCode(c.course.code || c.course.name || String(c.course.id)) }));
+  const all = (body.courses || []).filter((c) => c.course).map((c) => ({
+    id: c.course.id,
+    course: courseFromCode(c.course.code || c.course.name || String(c.course.id)),
+    active: c.course.status === 'active',
+  }));
+  if (!config.edCourses.length) return all.filter((c) => c.active).map(({ id, course }) => ({ id, course }));
+  return config.edCourses.map((c) => ({ id: c.id, course: named(c) ? c.course : all.find((a) => a.id === c.id)?.course || String(c.id) }));
 }
 
 // body: the JSON from /api/courses/<id>/lessons
@@ -66,4 +73,5 @@ module.exports = {
   secrets: ['edToken'],
   fetch: fetchEd,
   parseLessons,
+  edCourseList,
 };

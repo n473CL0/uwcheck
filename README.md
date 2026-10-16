@@ -33,7 +33,7 @@
    - **Ed API token** *(optional)*: create one at [edstem.org → Settings → API Tokens](https://edstem.org/us/settings/api-tokens).
 4. Click **Save & sync**.
 
-That's it. From now on, open **UWCheck** like any other app: search for it in the Start menu, Spotlight or your app launcher (on Windows it's on your desktop too). It runs in the background, so you can close the terminal. When an update is out, an **Update** button appears in the header.
+That's it. From now on, open **UWCheck** like any other app: search for it in the Start menu, Spotlight or your app launcher (on Windows it's on your desktop too). It runs in the background, so you can close the terminal. When an update is out, an **Update** button appears in the header: click it and UWCheck updates and restarts itself.
 
 | Command | What it does |
 |---|---|
@@ -47,10 +47,16 @@ That's it. From now on, open **UWCheck** like any other app: search for it in th
 UW CSE courses often list work on their `assignments.html` page before it's released on Ed. Add them under **Settings → Advanced**, one per line:
 
 ```
-https://courses.cs.washington.edu/courses/cse351/26au/assignments.html = CSE 351
+https://courses.cs.washington.edu/courses/cse351/26au/assignments.html
 ```
 
-The same panel lets you limit or rename Ed and Canvas courses (`course id = name`).
+UWCheck names the course from the URL (`CSE 351`); add ` = name` after it to pick another. The same panel lets you limit or rename Ed and Canvas courses (`course id = name`).
+
+## Good to know
+
+- **Reminders:** turn them on in **Settings** to get a notification a day and 2 hours before each deadline, while UWCheck is open.
+- **Your own calendar app:** **Settings** has a feed address (`http://localhost:7351/calendar.ics`) that Apple Calendar or Outlook on the same computer can subscribe to.
+- **Keyboard:** press <kbd>?</kbd> for shortcuts. <kbd>/</kbd> searches, <kbd>J</kbd>/<kbd>K</kbd> move through the list, <kbd>X</kbd> ticks.
 
 ## Privacy
 

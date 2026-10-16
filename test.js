@@ -9,7 +9,7 @@ const path = require('path');
 
 // Keep the real ~/.uwcheck out of it.
 process.env.UWCHECK_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'uwcheck-test-'));
-const { mergedItems, SOURCES, applyConfig, publicConfig, FILES } = require('./server.js');
+const { mergedItems, SOURCES, applyConfig, publicConfig, applyStateAction, calendarFeed, FILES } = require('./server.js');
 const { zoned, courseFromCode } = require('./sources/common');
 
 test('Seattle wall-clock time across daylight saving changes', () => {
@@ -63,4 +63,49 @@ test('every source follows the contract in CONTRIBUTING.md', () => {
     for (const key of s.secrets) assert.ok(key in s.config, `${file}: secret ${key} needs a default in config`);
   }
   assert.deepStrictEqual(SOURCES.map((s) => s.name).sort(), [...names].sort(), 'add every source to SOURCES in server.js');
+});
+
+test('ticks and your own deadlines', () => {
+  applyStateAction({ type: 'done', done: { 'ed:1': true, 'ed:2': false } });
+  applyStateAction({ type: 'done', done: { 'ed:1': null } }); // undo back to "never ticked"
+  let saved = JSON.parse(fs.readFileSync(FILES.state, 'utf8'));
+  assert.deepStrictEqual(saved.done, { 'ed:2': false });
+
+  applyStateAction({ type: 'color', colors: { 'CSE 351': '#4a7fb0', 'MATH 327': '#c2643f' } });
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(FILES.state, 'utf8')).colors, { 'CSE 351': '#4a7fb0', 'MATH 327': '#c2643f' });
+
+  applyStateAction({ type: 'addCustom', item: { title: ' Study ', due: '2026-10-20T12:00:00Z', allDay: true } });
+  const [added] = JSON.parse(fs.readFileSync(FILES.state, 'utf8')).custom;
+  assert.strictEqual(added.title, 'Study');
+  assert.strictEqual(added.course, 'Personal');
+  applyStateAction({ type: 'editCustom', id: added.id, item: { title: 'Study more', course: 'CSE 351', kind: added.kind, due: '2026-10-21T18:30:00Z' } });
+  saved = JSON.parse(fs.readFileSync(FILES.state, 'utf8'));
+  assert.deepStrictEqual(saved.custom, [{ ...added, title: 'Study more', course: 'CSE 351', due: '2026-10-21T18:30:00.000Z', allDay: false }]);
+  assert.throws(() => applyStateAction({ type: 'editCustom', id: added.id, item: { title: '' } }), /required/);
+  assert.throws(() => applyStateAction({ type: 'editCustom', id: 'custom:gone', item: { title: 'x', due: '2026-10-21' } }), /deleted/);
+
+  applyStateAction({ type: 'done', done: { [added.id]: true } });
+  applyStateAction({ type: 'deleteCustom', id: added.id });
+  saved = JSON.parse(fs.readFileSync(FILES.state, 'utf8'));
+  assert.deepStrictEqual([saved.custom, saved.done[added.id]], [[], undefined]);
+});
+
+test('the calendar feed reads back as the same deadlines', () => {
+  const { parseIcs, icsDate } = require('./sources/canvas');
+  const long = 'Lab 3: a very long title, with commas; semicolons and a backslash \\ to escape — ünïcödé too';
+  const ics = calendarFeed([
+    { id: 'ed:7', course: 'CSE 351', title: long, kind: 'Lab', due: '2026-10-13T06:59:00.000Z', url: 'https://edstem.org/x' },
+    { id: 'custom:a', course: 'Personal', title: 'Study', kind: 'Task', due: '2026-10-20T12:00:00.000Z', allDay: true, url: 'javascript:alert(1)' },
+    { id: 'site:CSE 351:HW9', course: 'CSE 351', title: 'HW9', kind: 'Homework', due: '2026-11-01T06:59:00.000Z', tentative: true },
+    { id: 'canvas:event-1', course: 'MATH 327', title: 'Lecture', kind: 'Event', due: '2026-10-13T17:30:00.000Z' },
+  ]);
+  for (const line of ics.split('\r\n')) assert.ok(Buffer.byteLength(line) <= 75, `line too long: ${line}`);
+  const events = parseIcs(ics);
+  assert.strictEqual(events.length, 3, 'events are left out');
+  assert.strictEqual(events[0].SUMMARY.value.replace(/\\([,;\\])/g, '$1'), `CSE 351: ${long}`);
+  assert.strictEqual(icsDate(events[0].DTSTART).due, '2026-10-13T06:59:00.000Z');
+  assert.strictEqual(events[0].URL.value, 'https://edstem.org/x');
+  assert.deepStrictEqual(icsDate(events[1].DTSTART), { due: '2026-10-20T12:00:00.000Z', allDay: true });
+  assert.strictEqual(events[1].URL, undefined, 'only web links');
+  assert.strictEqual(events[2].STATUS.value, 'TENTATIVE');
 });

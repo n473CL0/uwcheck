@@ -129,6 +129,12 @@
   /* Logo purple is too dark to read as text on the dark background; the dot carries the colour. */
   :root[data-theme="dark"] .pill.update { color: var(--text); }
   .synced { margin-left: 4px; }
+  .search {
+    border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-ctl);
+    padding: 6px 10px; width: 220px; line-height: 1.25;
+  }
+  .search::placeholder { color: var(--faint); }
+  .search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 
   /* layout */
   main {
@@ -164,24 +170,44 @@
   }
   .day .add:hover { background: var(--surface-2); color: var(--text); }
   .day:hover .add, .day .add:focus-visible { opacity: 1; }
+  /* A chip is two buttons: the dot ticks it, the rest opens its details. */
   .chip {
     --c: #888;
-    display: flex; gap: 6px; align-items: center; width: 100%; text-align: left;
-    border: 0; border-radius: 6px;
+    display: flex; gap: 2px; align-items: center; min-width: 0;
+    border-radius: 6px; padding-left: 1px;
     background: color-mix(in srgb, var(--c) 10%, var(--surface));
-    padding: 2px 6px; font-size: 12px; line-height: 1.4; min-width: 0;
+    font-size: 12px; line-height: 1.4;
     transition: background-color .15s;
   }
-  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex: none; }
   .chip:hover { background: color-mix(in srgb, var(--c) 20%, var(--surface)); }
+  .chip .tick {
+    flex: none; width: 16px; height: 16px; border: 0; padding: 0; background: none;
+    display: grid; place-items: center; border-radius: 50%;
+  }
+  .chip .tick::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c);
+    transition: width .1s, height .1s;
+  }
+  /* Hovering the dot turns it into an empty circle, the usual sign for "tick me". */
+  button.tick:hover::before, button.tick:focus-visible::before {
+    width: 11px; height: 11px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--c);
+  }
+  .chip .go {
+    flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center;
+    border: 0; background: none; padding: 2px 6px 2px 2px; text-align: left; line-height: inherit;
+  }
   .chip .t { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; font-size: 11px; }
-  .chip .t:empty { display: none; }
+  .chip .cs { color: var(--muted); flex: none; font-size: 11px; font-weight: 600; }
+  .chip .t:empty, .chip .cs:empty { display: none; }
   .chip .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .chip.done { opacity: .45; }
   .chip.done .n { text-decoration: line-through; }
   .chip.tentative { background: transparent; outline: 1px dashed color-mix(in srgb, var(--c) 55%, transparent); outline-offset: -1px; }
+  /* Past and not ticked: a red edge, so the month shows what you missed. */
+  .chip.missed { box-shadow: inset 2px 0 0 var(--danger); }
+  .chip.missed .t { color: var(--danger); }
   .chip, .more { flex: none; }
-  .chip[hidden], .more[hidden], .seg[hidden] { display: none; }
+  .chip[hidden], .more[hidden] { display: none; }
   .day { overflow: hidden; min-height: 0; }
   .more {
     border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600;
@@ -191,10 +217,10 @@
   /* Week view: one tall row, full titles, every item visible (the column scrolls if needed). */
   .grid.week { grid-auto-rows: minmax(240px, 1fr); }
   .grid.week .day { overflow: auto; gap: 4px; }
-  .chip.full {
-    display: grid; grid-template-columns: auto 1fr; column-gap: 6px; row-gap: 1px; align-items: center;
-    padding: 5px 8px; line-height: 1.35;
-  }
+  .chip.full { align-items: flex-start; padding: 3px 0 3px 3px; line-height: 1.35; }
+  .chip.full .go { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; row-gap: 1px; align-items: center; }
+  .chip.full .t, .chip.full .cs { white-space: nowrap; }
+  .chip.full .cs { overflow: hidden; text-overflow: ellipsis; }
   .chip.full .n { grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere; }
   .day .wd { display: none; }
 
@@ -253,7 +279,9 @@
   }
   .row:hover { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
   .row input[type=checkbox] { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--c); cursor: pointer; }
-  .row .title { font-weight: 500; word-break: break-word; }
+  .row:focus-within { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
+  .row .title { font-weight: 500; word-break: break-word; border: 0; background: none; padding: 0; text-align: left; }
+  .row .title:hover { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 2px; }
   .row .meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 2px; }
   .row .meta .course { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
   .row .meta .course::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
@@ -307,17 +335,44 @@
   .field textarea { font: 12.5px/1.5 ui-monospace, Consolas, monospace; min-height: 64px; resize: vertical; }
   .inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; margin: -6px -10px 0 0; }
+  /* Settings is long enough to scroll: keep Close and Save in sight at the bottom. */
+  .dlg-actions.sticky {
+    position: sticky; bottom: -24px; margin: 0 -24px -24px; padding: 12px 24px 24px;
+    background: var(--surface); border-top: 1px solid var(--line);
+  }
   details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   details.adv[open] summary { margin-bottom: 12px; }
   details.adv[open] { display: flex; flex-direction: column; gap: 16px; }
   .err { color: var(--danger); font-size: 13px; }
   .err:empty { display: none; }
+  dialog hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+  /* Preferences that apply right away, as label / control pairs. */
+  .prefs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 14px 16px; align-items: baseline; font-size: 13px; }
+  .prefs > .k { font-weight: 600; }
+  .prefs > .seg { justify-self: start; }
+  .prefs > [hidden] { display: none; }
+  .prefs label { display: inline-flex; gap: 6px; align-items: center; }
+  .prefs input[type=checkbox] { accent-color: var(--accent); }
+  .prefs .help { color: var(--muted); font-size: 12.5px; }
+  .prefs .feed { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .prefs code { font-size: 12px; background: var(--surface-2); padding: 2px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+  .keys { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; margin: 0; font-size: 13.5px; }
+  .keys dt { white-space: nowrap; }
+  .keys dd { margin: 0; color: var(--muted); }
+  kbd {
+    font: 600 12px/1 "Open Sans", system-ui, sans-serif; display: inline-block; min-width: 22px; text-align: center;
+    padding: 4px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; background: var(--surface-2);
+  }
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 8px); z-index: 30;
+    display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px);
     background: var(--ink); color: var(--on-ink); padding: 8px 16px; border-radius: 999px; font-size: 13px;
     opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; box-shadow: var(--shadow);
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast button { pointer-events: auto; border: 0; background: none; color: inherit; font-weight: 700; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+  .toast button[hidden] { display: none; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; }
@@ -333,12 +388,14 @@
   }
   @media (max-width: 640px) {
     header { padding: 12px 16px; }
+    .search { order: 1; width: 100%; }
     main { padding: 0 16px 16px; gap: 16px; }
     .grid { grid-auto-rows: minmax(64px, auto); }
     .day { padding: 4px; }
-    .chip { padding: 2px 4px; }
-    .chip::before { display: none; }
-    .chip .t { display: none; }
+    .chip .go { padding: 2px 4px; }
+    .chip .tick, .chip .t, .chip .cs { display: none; }
+    .prefs { grid-template-columns: 1fr; gap: 4px; }
+    .prefs > .k:not(:first-child) { margin-top: 8px; }
     .cal-head { flex-wrap: wrap; }
     .cal-head h2 { min-width: 0; font-size: 17px; }
     /* Week view stacks the days on phones, so titles get the full width. */
@@ -348,8 +405,8 @@
     .grid.week .day .num { justify-content: flex-start; gap: 6px; }
     .grid.week .day .wd { display: inline; order: -1; }
     .grid.week .day .add { margin-left: auto; opacity: 1; }
-    .grid.week .chip::before { display: block; }
-    .grid.week .chip .t { display: inline; }
+    .grid.week .chip .tick { display: grid; }
+    .grid.week .chip .t, .grid.week .chip .cs { display: inline; }
     .inline { grid-template-columns: 1fr; }
   }
 </style>
@@ -359,17 +416,9 @@
   <h1><img src="/icon.svg" alt="">UWCheck</h1>
   <div class="sources" id="sources"></div>
   <div class="spacer"></div>
-  <div class="seg" id="tzSwitch" role="group" aria-label="Time zone">
-    <button id="tzLocal" title="Show times in this computer's time zone">Local</button>
-    <button id="tzSea" title="Show times in Seattle (UW) time">Seattle</button>
-  </div>
-  <div class="seg" role="group" aria-label="Theme">
-    <button id="thAuto" title="Match this device's light or dark setting">Auto</button>
-    <button id="thLight" title="Always light">Light</button>
-    <button id="thDark" title="Always dark">Dark</button>
-  </div>
+  <input class="search" id="search" type="search" placeholder="Search  ( / )" aria-label="Search deadlines" autocomplete="off">
   <button class="btn" id="syncBtn" title="Fetch the latest deadlines">Sync</button>
-  <button class="btn ghost" id="settingsBtn" title="Connect Canvas and Ed">Settings</button>
+  <button class="btn ghost" id="settingsBtn" title="Courses, theme, reminders">Settings</button>
 </header>
 
 <main>
@@ -412,11 +461,11 @@
 </main>
 
 <div class="pop" id="pop" role="dialog" aria-modal="false"></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
 
 <dialog id="addDlg">
   <form method="dialog" id="addForm">
-    <h2>Add a deadline</h2>
+    <h2 id="addHead">Add a deadline</h2>
     <div class="field">
       <label for="fTitle">Title</label>
       <input id="fTitle" required placeholder="e.g. Study for midterm">
@@ -435,7 +484,8 @@
       <input id="fUrl" type="url" placeholder="https://…">
     </div>
     <div class="dlg-actions">
-      <button class="btn" value="cancel" formnovalidate>Cancel</button>
+      <!-- type=button: otherwise Enter in a field presses the first button, Cancel. -->
+      <button class="btn" type="button" data-close>Cancel</button>
       <button class="btn primary" value="ok" id="addOk">Add</button>
     </div>
   </form>
@@ -443,7 +493,10 @@
 
 <dialog id="setDlg">
   <form method="dialog" id="setForm">
-    <h2>Connect your courses</h2>
+    <div class="dlg-head">
+      <h2>Settings</h2>
+      <button class="btn ghost icon" type="button" data-close aria-label="Close" title="Close (Esc)">✕</button>
+    </div>
     <div class="field">
       <label for="sCanvas">Canvas calendar feed URL</label>
       <input id="sCanvas" placeholder="https://canvas.uw.edu/feeds/calendars/user_….ics">
@@ -457,24 +510,65 @@
     <details class="adv">
       <summary>Advanced: course mappings</summary>
       <div class="field">
-        <label for="sEdCourses">Ed courses <span class="help">(one per line: course id = name)</span></label>
+        <label for="sEdCourses">Ed courses <span class="help">(one course id per line; add <code>= name</code> to rename)</span></label>
         <textarea id="sEdCourses"></textarea>
         <div class="help">Leave empty to include every active Ed course. The id is the number in <code>edstem.org/us/courses/<b>107500</b>/lessons</code>.</div>
       </div>
       <div class="field">
-        <label for="sSites">Course websites <span class="help">(url = name; UW CSE "assignments.html" pages)</span></label>
-        <textarea id="sSites"></textarea>
+        <label for="sSites">Course websites <span class="help">(one URL per line; add <code>= name</code> to rename)</span></label>
+        <textarea id="sSites" placeholder="https://courses.cs.washington.edu/courses/cse351/26au/assignments.html"></textarea>
+        <div class="help">UW CSE <code>assignments.html</code> pages. They list work before it's released on Ed.</div>
       </div>
       <div class="field">
         <label for="sCanvasCourses">Canvas course names <span class="help">(optional rename: canvas course id = name)</span></label>
         <textarea id="sCanvasCourses"></textarea>
       </div>
     </details>
+    <hr>
+    <!-- These apply as soon as you change them; Save is only for the course settings above. -->
+    <div class="prefs">
+      <span class="k">Theme</span>
+      <div class="seg" role="group" aria-label="Theme">
+        <button type="button" id="thAuto" title="Match this device's light or dark setting">Auto</button>
+        <button type="button" id="thLight" title="Always light">Light</button>
+        <button type="button" id="thDark" title="Always dark">Dark</button>
+      </div>
+      <span class="k" id="remindLabel">Reminders</span>
+      <div id="remindBox">
+        <label><input type="checkbox" id="sRemind"> Notify me a day and 2 hours before each deadline</label>
+        <div class="help" id="remindNote">Only while UWCheck is open. Skips hidden courses and types.</div>
+      </div>
+      <span class="k">Calendar apps</span>
+      <div>
+        <div class="feed"><code id="feedUrl"></code><button type="button" class="btn" id="feedCopy">Copy</button></div>
+        <div class="help">Paste it into a calendar app on this computer, such as Apple Calendar (On My Mac) or Outlook. Google Calendar can't reach it.</div>
+      </div>
+      <span class="k">Shortcuts</span>
+      <div><button type="button" class="btn" id="keysBtn">Keyboard shortcuts</button> <span class="help">or press <kbd>?</kbd></span></div>
+    </div>
     <div class="err" id="setErr"></div>
-    <div class="dlg-actions">
-      <button class="btn" value="cancel" formnovalidate>Cancel</button>
+    <div class="dlg-actions sticky">
+      <button class="btn" type="button" data-close>Close</button>
       <button class="btn primary" value="ok" id="setOk">Save &amp; sync</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="keysDlg">
+  <form method="dialog">
+    <h2>Keyboard shortcuts</h2>
+    <dl class="keys">
+      <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous or next month (or week)</dd>
+      <dt><kbd>T</kbd></dt><dd>Jump to today</dd>
+      <dt><kbd>M</kbd> <kbd>W</kbd></dt><dd>Month or week view</dd>
+      <dt><kbd>/</kbd></dt><dd>Search</dd>
+      <dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>Next or previous item in the to-do list</dd>
+      <dt><kbd>X</kbd></dt><dd>Tick or untick the selected item</dd>
+      <dt><kbd>Enter</kbd></dt><dd>Open the selected item's details</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close a popup, or clear the search</dd>
+      <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+    </dl>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Done</button></div>
   </form>
 </dialog>
 
@@ -483,18 +577,18 @@
 // Muted, evenly spaced hues so no single course shouts; all readable as dots on light and dark.
 const PALETTE = ['#4a7fb0', '#c2643f', '#4e9163', '#7d8c3c', '#c09036', '#3b9690', '#b85c7c', '#6e7f99', '#8a7356'];
 const KINDS = ['Homework', 'Lab', 'Reading', 'Lecture', 'Quiz', 'Exam', 'Assignment', 'Survey', 'Task', 'Event'];
-const SEATTLE = 'America/Los_Angeles';
 const $ = (id) => document.getElementById(id);
 
 let data = { items: [], state: { done: {}, colors: {} }, sources: {}, config: {} };
 const ui = loadUi();
 
+// view (the day the calendar shows) and q (the search) last only until the page reloads.
 function loadUi() {
-  const d = { tz: 'local', hiddenCourses: [], hiddenKinds: ['Event'], showDone: false, showTentative: true, filtersOpen: false, calView: 'month', theme: 'auto', collapsed: { overdue: false } };
-  try { return { ...d, ...JSON.parse(localStorage.getItem('deadlines-ui') || '{}'), view: null }; } catch { return { ...d, view: null }; }
+  const d = { hiddenCourses: [], hiddenKinds: ['Event'], showDone: false, showTentative: true, filtersOpen: false, calView: 'month', theme: 'auto', collapsed: { overdue: false }, reminders: false };
+  try { return { ...d, ...JSON.parse(localStorage.getItem('deadlines-ui') || '{}'), view: null, q: '' }; } catch { return { ...d, view: null, q: '' }; }
 }
 function saveUi() {
-  try { const { view, ...rest } = ui; localStorage.setItem('deadlines-ui', JSON.stringify(rest)); } catch {}
+  try { const { view, q, ...rest } = ui; localStorage.setItem('deadlines-ui', JSON.stringify(rest)); } catch {}
 }
 
 // ---------- api ----------
@@ -505,46 +599,49 @@ async function api(path, body) {
   return json;
 }
 let serverVersion;
-async function load() {
-  data = await api('/api/data');
+// force: redraw even if nothing changed, so countdowns ("in 40 min") and today's date stay current.
+async function load(force) {
+  const next = await api('/api/data');
   // The server restarts itself after an update; reload to pick up the new page too.
-  if (serverVersion && data.version !== serverVersion) return location.reload();
-  serverVersion = data.version;
-  render();
+  if (serverVersion && next.version !== serverVersion) return location.reload();
+  serverVersion = next.version;
+  // Nothing new (the usual case when you come back to the window): leave the page alone. The click
+  // that brought you back focuses the window first, and rebuilding the page between its mouse-down
+  // and mouse-up would swallow it.
+  const same = JSON.stringify(next) === JSON.stringify(data);
+  data = next;
+  if (same && !force) renderSources(); // just the "Synced … ago" text
+  else render();
+  remind();
 }
 const isConnected = () => Object.values(data.sources).some((s) => s.status && s.status !== 'not-configured');
 async function act(action) {
   try { data = await api('/api/state', action); render(); } catch (e) { toast(e.message); }
 }
+// Ticks or unticks, then offers Undo, which puts back exactly what was saved before (including no tick at all).
+function setDone(items, value) {
+  const before = Object.fromEntries(items.map((i) => [i.id, data.state.done[i.id] ?? null]));
+  act({ type: 'done', done: Object.fromEntries(items.map((i) => [i.id, value])) });
+  const what = items.length === 1 ? '' : ` ${items.length} items`;
+  toast(`Marked${what} ${value ? 'done' : 'not done'}`, 6000, () => act({ type: 'done', done: before }));
+}
 
 // ---------- time ----------
-const tz = () => (ui.tz === 'seattle' ? SEATTLE : undefined);
-const keyFmt = () => new Intl.DateTimeFormat('en-CA', { timeZone: tz(), year: 'numeric', month: '2-digit', day: '2-digit' });
+// Everything shows in this computer's time zone. Made fresh each time, so a laptop that changes zone follows.
+const keyFmt = () => new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 function dayKey(item) {
   return item.allDay ? item.due.slice(0, 10) : keyFmt().format(new Date(item.due));
 }
 const todayKey = () => keyFmt().format(new Date());
 const keyToUtc = (k) => Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10));
 const dayDiff = (a, b) => Math.round((keyToUtc(a) - keyToUtc(b)) / 86400000);
-const fmtTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { timeZone: tz(), hour: '2-digit', minute: '2-digit' });
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+// For narrow month cells: "05:05 PM" -> "5:05p" (24-hour times just lose the leading zero).
+const shortTime = (iso) => fmtTime(iso).replace(/^0(?=\d)/, '').replace(/\s?([ap])\.?\s?m\.?$/i, (m, p) => p.toLowerCase());
+// "23:59", the format a time input takes.
+const inputTime = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function fmtDay(k, opts = { weekday: 'short', day: 'numeric', month: 'short' }) {
   return new Date(keyToUtc(k)).toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' });
-}
-// Copied from sources/common.js (tested there): wall-clock time in a named zone -> Date.
-function tzOffsetMs(ts, zone) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: zone, hourCycle: 'h23',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(ts));
-  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
-  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ts / 1000) * 1000;
-}
-function zoned(y, mo, d, h, mi, zone) {
-  const wall = Date.UTC(y, mo - 1, d, h, mi);
-  let ts = wall - tzOffsetMs(wall, zone);
-  ts = wall - tzOffsetMs(ts, zone);
-  return new Date(ts);
 }
 
 // ---------- model ----------
@@ -558,17 +655,23 @@ function courses() {
 function colorOf(course) {
   if (data.state.colors[course]) return data.state.colors[course];
   const list = courses();
-  const used = new Set(Object.values(data.state.colors));
+  // Only colours of courses you still have count as taken; last quarter's are free again.
+  const used = new Set(list.map((c) => data.state.colors[c]).filter(Boolean));
   const free = PALETTE.filter((c) => !used.has(c));
   const idx = list.filter((c) => !data.state.colors[c]).indexOf(course);
   return free.length ? free[idx % free.length] : PALETTE[list.indexOf(course) % PALETTE.length];
 }
-function visible(it) {
+// Kept by the filters (reminders use this; they ignore the search).
+function shown(it) {
   if (ui.hiddenCourses.includes(it.course)) return false;
   if (ui.hiddenKinds.includes(it.kind)) return false;
   if (it.tentative && !ui.showTentative) return false;
   return true;
 }
+const visible = (it) => shown(it) && (!ui.q || `${it.title} ${it.course} ${it.kind}`.toLowerCase().includes(ui.q));
+// Past its due time and not ticked. Events aren't to-dos, so they're never missed.
+const isMissed = (it) => it.kind !== 'Event' && !isDone(it)
+  && (it.allDay ? dayKey(it) < todayKey() : new Date(it.due) < Date.now());
 const byDue = (a, b) => a.due.localeCompare(b.due) || a.title.localeCompare(b.title);
 // Links come from outside sites: only link to web pages, never javascript: or other schemes.
 const hasWebUrl = (it) => /^https?:\/\//i.test(it.url || '');
@@ -580,8 +683,11 @@ function shortName(it) {
 // ---------- render ----------
 function render() {
   if (!ui.view) ui.view = todayKey(); // the day the calendar is centred on
-  $('tzLocal').setAttribute('aria-pressed', ui.tz !== 'seattle');
-  $('tzSea').setAttribute('aria-pressed', ui.tz === 'seattle');
+  // Rebuilding the lists drops keyboard focus. Note where it was, to put it back after.
+  const el = document.activeElement;
+  const holder = el?.closest('[data-id]');
+  const box = holder?.closest('#todo, #grid, #pop');
+  const index = box ? [...box.querySelectorAll('[data-id]')].indexOf(holder) : -1;
   for (const [id, t] of [['thAuto', 'auto'], ['thLight', 'light'], ['thDark', 'dark']]) $(id).setAttribute('aria-pressed', ui.theme === t);
   $('showDone').checked = ui.showDone;
   $('showTentative').checked = ui.showTentative;
@@ -590,7 +696,21 @@ function render() {
   renderCalendar();
   renderLegend();
   renderTodo();
+  if (popRefresh) popRefresh();
+  // Same item if it's still there, otherwise the one that took its place (say, after ticking it away).
+  if (box && !holder.isConnected) {
+    const all = [...box.querySelectorAll('[data-id]')];
+    const next = all.find((x) => x.dataset.id === holder.dataset.id) || all[Math.min(index, all.length - 1)];
+    next?.querySelector(el.tagName === 'INPUT' ? 'input' : `.${el.classList[0]}`)?.focus();
+  }
+  // Save a colour for each new course, so a course added later can't shift the others' colours.
+  const fresh = courses().filter((c) => !data.state.colors[c]);
+  if (fresh.length && !savingColors) {
+    savingColors = true;
+    act({ type: 'color', colors: Object.fromEntries(fresh.map((c) => [c, colorOf(c)])) }).finally(() => { savingColors = false; });
+  }
 }
+let savingColors = false;
 
 function renderSources() {
   const box = $('sources');
@@ -619,18 +739,45 @@ function renderSources() {
     box.append(t);
   }
   if (data.update) {
-    const { latest, command, autoRestart } = data.update;
+    const { latest, command, autoRestart, oneClick } = data.update;
     const u = document.createElement('button');
     u.className = 'pill update';
-    u.title = `UWCheck ${latest} is available. Click to copy the update command.`;
+    u.title = oneClick ? `Click to update to UWCheck ${latest}` : `UWCheck ${latest} is available. Click to copy the update command.`;
     u.innerHTML = '<span class="dot"></span>';
-    u.append(`Update to ${latest}`);
-    u.onclick = async () => {
+    u.append(updating ? 'Updating…' : `Update to ${latest}`);
+    u.disabled = updating;
+    u.onclick = oneClick ? update : async () => {
       try { await navigator.clipboard.writeText(command); } catch {}
       toast(`Copied "${command}". Run it in a terminal, ${autoRestart ? 'and UWCheck switches over within a minute.' : 'then restart UWCheck.'}`, 8000);
     };
     box.append(u);
   }
+}
+
+// The server installs the new version, then restarts onto it. Keep asking until the new one answers;
+// load() reloads the page as soon as the version changes.
+let updating = false;
+async function update() {
+  updating = true;
+  renderSources();
+  try {
+    await api('/api/update', {});
+  } catch (e) {
+    // A dropped connection just means the server restarted before it could answer.
+    if (!(e instanceof TypeError)) {
+      updating = false;
+      renderSources();
+      return toast(e.message, 8000);
+    }
+  }
+  toast('Installed. Restarting UWCheck…', 60000);
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try { await load(); } catch {}
+  }
+  updating = false;
+  renderSources();
+  toast('UWCheck didn\'t come back. Open it again from your apps.', 10000);
 }
 
 function ago(iso) {
@@ -642,20 +789,40 @@ function ago(iso) {
   return `${Math.floor(s / 86400)} d ago`;
 }
 
-function chip(it, full) {
-  const b = document.createElement('button');
-  b.className = 'chip' + (full ? ' full' : '') + (isDone(it) ? ' done' : '') + (it.tentative ? ' tentative' : '');
-  b.style.setProperty('--c', colorOf(it.course));
-  b.title = `${it.course} · ${it.title}\n${it.allDay ? 'All day' : fmtTime(it.due)}${it.tentative ? ' (not released yet)' : ''}`;
+// onOpen: what clicking the chip does (default: show its details next to it).
+function chip(it, full, onOpen = (el) => showPop(it, el)) {
+  const done = isDone(it);
+  const c = document.createElement('div');
+  c.className = 'chip' + (full ? ' full' : '') + (done ? ' done' : '') + (it.tentative ? ' tentative' : '') + (isMissed(it) ? ' missed' : '');
+  c.dataset.id = it.id;
+  c.style.setProperty('--c', colorOf(it.course));
+  let tick;
+  if (it.kind === 'Event') {
+    tick = document.createElement('span'); // nothing to tick
+  } else {
+    tick = document.createElement('button');
+    tick.title = done ? 'Mark not done' : 'Mark done';
+    tick.setAttribute('aria-label', `${tick.title}: ${it.title}`);
+    tick.onclick = (e) => { e.stopPropagation(); setDone([it], !done); };
+  }
+  tick.className = 'tick';
+  const go = document.createElement('button');
+  go.className = 'go';
+  go.title = `${it.course} · ${it.title}\n${it.allDay ? 'All day' : fmtTime(it.due)}${it.tentative ? ' (not released yet)' : ''}${isMissed(it) ? '\nPast due, not ticked' : ''}`;
   const t = document.createElement('span');
   t.className = 't';
-  t.textContent = it.allDay ? (full ? 'All day' : '') : fmtTime(it.due);
+  t.textContent = it.allDay ? (full ? 'All day' : '') : full ? fmtTime(it.due) : shortTime(it.due);
+  // The course, so colour isn't the only way to tell "HW1" in one course from another's.
+  const cs = document.createElement('span');
+  cs.className = 'cs';
+  cs.textContent = full ? it.course : (it.course.match(/\d{3}/) || [''])[0];
   const n = document.createElement('span');
   n.className = 'n';
   n.textContent = full ? it.title : shortName(it);
-  b.append(t, n);
-  b.onclick = (e) => { e.stopPropagation(); showPop(it, b); };
-  return b;
+  go.append(t, cs, n);
+  go.onclick = (e) => { e.stopPropagation(); onOpen(go); };
+  c.append(tick, go);
+  return c;
 }
 
 const DAY_MS = 86400000;
@@ -790,7 +957,7 @@ function renderLegend() {
     pick.type = 'color';
     pick.value = colorOf(c);
     pick.onclick = (e) => e.stopPropagation();
-    pick.onchange = () => act({ type: 'color', course: c, color: pick.value });
+    pick.onchange = () => act({ type: 'color', colors: { [c]: pick.value } });
     sw.append(pick);
     tag.append(sw, c);
     tag.onclick = () => {
@@ -832,11 +999,14 @@ function renderTodo() {
   const today = todayKey();
   const list = data.items.filter((i) => visible(i) && i.kind !== 'Event').sort(byDue);
   const groups = [
-    { id: 'overdue', label: ui.showDone ? 'Past' : 'Overdue', items: [] },
+    { id: 'overdue', label: ui.showDone ? 'Past week' : 'Overdue', items: [] },
     { id: 'today', label: 'Today', items: [] },
     { id: 'tomorrow', label: 'Tomorrow', items: [] },
     { id: 'week', label: 'Next 7 days', items: [] },
     { id: 'later', label: 'Later', items: [] },
+    // Last and folded: work over a week late is rarely still open, and Canvas never says what you
+    // submitted, so this fills with things you did but didn't tick. They'd bury the real Overdue list.
+    { id: 'older', label: ui.showDone ? 'Earlier' : 'Overdue over a week', items: [] },
   ];
   const g = Object.fromEntries(groups.map((x) => [x.id, x]));
   let open = 0;
@@ -845,7 +1015,8 @@ function renderTodo() {
     const diff = dayDiff(dayKey(it), today);
     if (!done) open++;
     if (done && !ui.showDone) continue;
-    if (diff < 0) g.overdue.items.push(it);
+    if (diff < -7) g.older.items.push(it);
+    else if (diff < 0) g.overdue.items.push(it);
     else if (diff === 0) g.today.items.push(it);
     else if (diff === 1) g.tomorrow.items.push(it);
     else if (diff <= 7) g.week.items.push(it);
@@ -861,7 +1032,7 @@ function renderTodo() {
     any = true;
     const h = document.createElement('div');
     h.className = 'group-h' + (grp.id === 'overdue' ? ' overdue' : '');
-    const collapsed = ui.collapsed[grp.id];
+    const collapsed = ui.collapsed[grp.id] ?? grp.id === 'older';
     const cap = document.createElement('button');
     cap.className = 'caret';
     cap.setAttribute('aria-expanded', !collapsed);
@@ -871,7 +1042,7 @@ function renderTodo() {
     cap.append(grp.label, n);
     cap.onclick = () => { ui.collapsed[grp.id] = !collapsed; saveUi(); renderTodo(); };
     h.append(cap);
-    if (grp.id === 'overdue') {
+    if (grp.id === 'overdue' || grp.id === 'older') {
       const pending = grp.items.filter((i) => !isDone(i));
       if (pending.length) {
         const sp = document.createElement('span');
@@ -879,7 +1050,7 @@ function renderTodo() {
         const all = document.createElement('button');
         all.className = 'link';
         all.textContent = 'Mark all done';
-        all.onclick = () => act({ type: 'doneMany', ids: pending.map((i) => i.id), value: true });
+        all.onclick = () => setDone(pending, true);
         h.append(sp, all);
       }
     }
@@ -892,9 +1063,19 @@ function renderTodo() {
     e.className = 'empty';
     const head = document.createElement('strong');
     const sub = document.createElement('span');
+    e.append(head, sub);
     if (!isConnected()) {
       head.textContent = 'Connect your courses to get started';
-      sub.textContent = 'Open Settings and paste your Canvas calendar feed and Ed token.';
+      sub.textContent = 'Paste your Canvas calendar feed and Ed token, and UWCheck does the rest.';
+      const go = document.createElement('button');
+      go.className = 'btn primary';
+      go.textContent = 'Connect courses';
+      go.style.margin = '12px auto 0';
+      go.onclick = openSettings;
+      e.append(go);
+    } else if (ui.q) {
+      head.textContent = 'Nothing matches your search';
+      sub.textContent = 'Search looks at titles, courses and types. Press Esc to clear it.';
     } else if (open) {
       head.textContent = 'Everything here is filtered out';
       sub.textContent = 'Turn courses back on above, or open Filters.';
@@ -902,7 +1083,6 @@ function renderTodo() {
       head.textContent = 'Nothing left to do';
       sub.textContent = 'New deadlines appear here after each sync.';
     }
-    e.append(head, sub);
     box.append(e);
   }
   box.scrollTop = scroll;
@@ -912,16 +1092,19 @@ function row(it, today) {
   const done = isDone(it);
   const r = document.createElement('div');
   r.className = 'row' + (done ? ' done' : '');
+  r.dataset.id = it.id;
   r.style.setProperty('--c', colorOf(it.course));
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.checked = done;
   cb.setAttribute('aria-label', `Mark ${it.title} done`);
-  cb.onchange = () => act({ type: 'done', id: it.id, value: cb.checked });
+  cb.onchange = () => setDone([it], cb.checked);
   const mid = document.createElement('div');
-  const title = document.createElement('div');
+  const title = document.createElement('button');
   title.className = 'title';
   title.textContent = it.title;
+  title.title = 'Details';
+  title.onclick = (e) => { e.stopPropagation(); showPop(it, title); };
   const meta = document.createElement('div');
   meta.className = 'meta';
   const course = document.createElement('span');
@@ -964,7 +1147,7 @@ function row(it, today) {
     const s = document.createElement('div');
     s.textContent = hrs < 1 ? `in ${Math.max(1, Math.round(hrs * 60))} min` : `in ${Math.round(hrs)} h`;
     when.append(s);
-  } else if (!done && hrs < 0) {
+  } else if (isMissed(it)) {
     when.classList.add('late');
   }
   r.append(cb, mid, when);
@@ -973,10 +1156,14 @@ function row(it, today) {
 
 // ---------- popover ----------
 const pop = $('pop');
+// Redraws the open popup after a change (say, a tick), so it never shows stale state.
+let popRefresh = null;
 // anchor is an element or a DOMRect; back (optional) reopens the day list this came from.
 function showPop(it, anchor, back) {
   const rect = anchor instanceof DOMRect ? anchor : anchor.getBoundingClientRect();
+  it = data.items.find((i) => i.id === it.id) || it; // the latest copy, after an edit
   const done = isDone(it);
+  popRefresh = () => showPop(it, rect, back);
   pop.replaceChildren();
   pop.style.setProperty('--c', colorOf(it.course));
   const h = document.createElement('h3');
@@ -986,7 +1173,7 @@ function showPop(it, anchor, back) {
   const k = dayKey(it);
   const lines = [
     `${it.course} · ${it.kind}`,
-    `Due ${fmtDay(k, { weekday: 'long', day: 'numeric', month: 'long' })}${it.allDay ? '' : ' at ' + fmtTime(it.due)}${ui.tz === 'seattle' ? ' (Seattle)' : ''}`,
+    `Due ${fmtDay(k, { weekday: 'long', day: 'numeric', month: 'long' })}${it.allDay ? '' : ' at ' + fmtTime(it.due)}`,
     it.source === 'custom' ? 'Added by you' : `From ${data.sources[it.source]?.label || it.source}`,
   ];
   if (it.tentative) lines.push('Not released yet, so the date may change');
@@ -1001,7 +1188,7 @@ function showPop(it, anchor, back) {
   const tg = document.createElement('button');
   tg.className = 'btn primary';
   tg.textContent = done ? 'Mark not done' : 'Mark done';
-  tg.onclick = () => { hidePop(); act({ type: 'done', id: it.id, value: !done }); };
+  tg.onclick = () => { hidePop(); setDone([it], !done); };
   actions.append(tg);
   if (hasWebUrl(it)) {
     const a = document.createElement('a');
@@ -1013,11 +1200,20 @@ function showPop(it, anchor, back) {
     actions.append(a);
   }
   if (it.source === 'custom') {
+    const edit = document.createElement('button');
+    edit.className = 'btn';
+    edit.textContent = 'Edit';
+    edit.onclick = () => openAdd(null, it);
     const del = document.createElement('button');
     del.className = 'btn';
     del.textContent = 'Delete';
-    del.onclick = () => { hidePop(); act({ type: 'deleteCustom', id: it.id }); };
-    actions.append(del);
+    del.onclick = () => {
+      hidePop();
+      act({ type: 'deleteCustom', id: it.id });
+      // shortcut: Undo adds it back as new, so a tick on it is lost; fine for something you just deleted.
+      toast('Deleted', 6000, () => act({ type: 'addCustom', item: it }));
+    };
+    actions.append(edit, del);
   }
   if (back) {
     const b = document.createElement('button');
@@ -1030,18 +1226,15 @@ function showPop(it, anchor, back) {
   placePop(rect);
 }
 function showDayPop(k, items, anchor) {
-  const rect = anchor.getBoundingClientRect();
+  const rect = anchor instanceof DOMRect ? anchor : anchor.getBoundingClientRect();
+  popRefresh = () => showDayPop(k, items, rect);
   pop.replaceChildren();
   pop.style.removeProperty('--c');
   const h = document.createElement('h3');
   h.textContent = fmtDay(k, { weekday: 'long', day: 'numeric', month: 'long' });
   const list = document.createElement('div');
   list.className = 'day-list';
-  for (const it of items) {
-    const c = chip(it, true);
-    c.onclick = (e) => { e.stopPropagation(); showPop(it, rect, () => showDayPop(k, items, anchor)); };
-    list.append(c);
-  }
+  for (const it of items) list.append(chip(it, true, () => showPop(it, rect, () => showDayPop(k, items, rect))));
   pop.append(h, list);
   placePop(rect);
 }
@@ -1054,16 +1247,32 @@ function placePop(r) {
   pop.style.left = Math.max(12, left) + 'px';
   pop.style.top = top + 'px';
 }
-function hidePop() { pop.classList.remove('show'); }
-document.addEventListener('click', (e) => { if (!pop.contains(e.target)) hidePop(); });
+function hidePop() {
+  pop.classList.remove('show');
+  popRefresh = null;
+}
+// A click outside closes it; Undo on the toast doesn't count, since it changes what the popup shows.
+document.addEventListener('click', (e) => { if (!pop.contains(e.target) && !$('toast').contains(e.target)) hidePop(); });
 
 // ---------- add dialog ----------
-function openAdd(dateKey) {
+// With item: edit that deadline (one you added) instead of adding a new one.
+let editing = null;
+function openAdd(dateKey, item) {
   hidePop();
+  editing = item || null;
   $('addForm').reset();
-  $('fDate').value = dateKey || todayKey();
+  $('addHead').textContent = item ? 'Edit deadline' : 'Add a deadline';
+  $('addOk').textContent = item ? 'Save' : 'Add';
+  $('fDate').value = item ? dayKey(item) : dateKey || todayKey();
+  if (item) {
+    $('fTitle').value = item.title;
+    $('fCourse').value = item.course;
+    $('fTime').value = item.allDay ? '' : inputTime(item.due);
+    $('fUrl').value = item.url || '';
+  }
   const dl = $('courseList');
   dl.replaceChildren(...courses().map((c) => Object.assign(document.createElement('option'), { value: c })));
+  $('addDlg').returnValue = ''; // else Esc would repeat the last Add
   $('addDlg').showModal();
   $('fTitle').focus();
 }
@@ -1075,14 +1284,16 @@ $('addDlg').addEventListener('close', () => {
   let due, allDay = false;
   if (time) {
     const [h, mi] = time.split(':').map(Number);
-    // Read the time in the zone the page is showing, like the date already is.
-    due = (ui.tz === 'seattle' ? zoned(y, mo, d, h, mi, SEATTLE) : new Date(y, mo - 1, d, h, mi)).toISOString();
+    due = new Date(y, mo - 1, d, h, mi).toISOString();
   } else {
     due = new Date(Date.UTC(y, mo - 1, d, 12)).toISOString();
     allDay = true;
   }
-  act({ type: 'addCustom', item: { title: $('fTitle').value, course: $('fCourse').value, due, allDay, url: $('fUrl').value } });
+  const item = { title: $('fTitle').value, course: $('fCourse').value, kind: editing?.kind, due, allDay, url: $('fUrl').value };
+  act(editing ? { type: 'editCustom', id: editing.id, item } : { type: 'addCustom', item });
 });
+// Cancel buttons are type=button so Enter in a field saves instead; they close their dialog here.
+for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => b.closest('dialog').close('cancel');
 
 // ---------- settings ----------
 function openSettings() {
@@ -1094,17 +1305,30 @@ function openSettings() {
   $('sEd').placeholder = c.hasEdToken ? '•••••• saved (leave blank to keep)' : 'Paste your token';
   $('edState').hidden = !c.hasEdToken;
   $('sEdClear').checked = false;
-  $('sEdCourses').value = (c.edCourses || []).map((x) => `${x.id} = ${x.course}`).join('\n');
-  $('sSites').value = (c.courseSites || []).map((x) => `${x.url} = ${x.course}`).join('\n');
+  // A name equal to the id or URL is how older versions saved a line without one.
+  $('sEdCourses').value = (c.edCourses || []).map((x) => (x.course && x.course !== String(x.id) ? `${x.id} = ${x.course}` : x.id)).join('\n');
+  $('sSites').value = (c.courseSites || []).map((x) => (x.course && x.course !== x.url ? `${x.url} = ${x.course}` : x.url)).join('\n');
   $('sCanvasCourses').value = Object.entries(c.canvasCourses || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
+  $('sRemind').checked = ui.reminders && window.Notification?.permission === 'granted';
+  $('feedUrl').textContent = `${location.origin}/calendar.ics`;
   $('setDlg').showModal();
 }
+// "key = name" per line. A line with no name gives '', and the server picks one (from the URL, or Ed).
 function pairs(text) {
   return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
-    const i = l.lastIndexOf(' = ') >= 0 ? l.lastIndexOf(' = ') : l.lastIndexOf('=');
+    // In a URL a bare "=" belongs to it (page?id=5), so a site's name needs the spaces: "url = name".
+    const i = l.lastIndexOf(' = ') >= 0 ? l.lastIndexOf(' = ') : /^https?:\/\//i.test(l) ? -1 : l.lastIndexOf('=');
     const sep = l.slice(i).startsWith(' = ') ? 3 : 1;
-    return i < 0 ? [l, l] : [l.slice(0, i).trim(), l.slice(i + sep).trim()];
+    return i < 0 ? [l, ''] : [l.slice(0, i).trim(), l.slice(i + sep).trim()];
   });
+}
+// "Canvas: 64 deadlines in 5 courses · Ed: …", for each source that synced.
+function syncSummary() {
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  return Object.entries(data.sources).filter(([, s]) => s.status === 'ok').map(([name, s]) => {
+    const found = data.items.filter((i) => i.source === name && i.kind !== 'Event');
+    return `${s.label}: ${plural(found.length, 'deadline')} in ${plural(new Set(found.map((i) => i.course)).size, 'course')}`;
+  }).join(' · ');
 }
 $('setForm').addEventListener('submit', async (e) => {
   if (e.submitter?.value !== 'ok') return;
@@ -1117,14 +1341,16 @@ $('setForm').addEventListener('submit', async (e) => {
       canvasIcsUrl: $('sCanvas').value,
       edToken: $('sEd').value,
       clearEdToken: $('sEdClear').checked,
-      edCourses: pairs($('sEdCourses').value).map(([id, course]) => ({ id: Number(id), course })),
+      // The first number, so a pasted course link (edstem.org/us/courses/107500/lessons) works too.
+      edCourses: pairs($('sEdCourses').value).map(([id, course]) => ({ id: Number((id.match(/\d+/) || [id])[0]), course })),
       courseSites: pairs($('sSites').value).map(([url, course]) => ({ url, course })),
-      canvasCourses: Object.fromEntries(pairs($('sCanvasCourses').value)),
+      canvasCourses: Object.fromEntries(pairs($('sCanvasCourses').value).filter(([, name]) => name)),
     });
-    const errs = Object.entries(data.sources).filter(([, s]) => s.status === 'error').map(([k, s]) => `${k}: ${s.error}`);
+    const errs = Object.values(data.sources).filter((s) => s.status === 'error').map((s) => `${s.label}: ${s.error}`);
     render();
-    if (errs.length) $('setErr').textContent = 'Saved, but: ' + errs.join(' · ');
-    else { $('setDlg').close(); toast('Saved and synced'); }
+    const found = syncSummary();
+    if (errs.length) $('setErr').textContent = `Saved${found ? ` (${found})` : ''}, but ${errs.join(' · ')}`;
+    else { $('setDlg').close(); toast(found ? `Synced. ${found}` : 'Saved', 6000); }
   } catch (err) {
     $('setErr').textContent = err.message;
   } finally {
@@ -1135,9 +1361,16 @@ $('setForm').addEventListener('submit', async (e) => {
 
 // ---------- misc ----------
 let toastTimer;
-function toast(msg, ms = 2600) {
+// undo (optional): what the toast's Undo button does.
+function toast(msg, ms = 2600, undo) {
   const t = $('toast');
-  t.textContent = msg;
+  $('toastMsg').textContent = msg;
+  $('toastUndo').hidden = !undo;
+  $('toastUndo').onclick = () => {
+    t.classList.remove('show');
+    $('toastUndo').blur(); // focus shouldn't stay on a hidden button
+    undo();
+  };
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), ms);
@@ -1187,13 +1420,6 @@ $('todayBtn').onclick = () => { ui.view = null; render(); };
 $('syncBtn').onclick = sync;
 $('settingsBtn').onclick = openSettings;
 $('addBtn').onclick = () => openAdd();
-// On a computer already set to Seattle time both choices show the same thing, so hide the switch.
-if (Intl.DateTimeFormat().resolvedOptions().timeZone === SEATTLE) {
-  ui.tz = 'local';
-  $('tzSwitch').hidden = true;
-}
-$('tzLocal').onclick = () => { ui.tz = 'local'; saveUi(); render(); };
-$('tzSea').onclick = () => { ui.tz = 'seattle'; saveUi(); render(); };
 // Same rule as the script in <head>; this one also follows the device when it switches.
 const deviceDark = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
@@ -1208,22 +1434,103 @@ applyTheme();
 $('showDone').onchange = (e) => { ui.showDone = e.target.checked; saveUi(); render(); };
 $('showTentative').onchange = (e) => { ui.showTentative = e.target.checked; saveUi(); render(); };
 $('filters').addEventListener('toggle', () => { ui.filtersOpen = $('filters').open; saveUi(); });
+$('search').oninput = (e) => { ui.q = e.target.value.trim().toLowerCase(); render(); };
+$('search').onkeydown = (e) => {
+  if (e.key !== 'Escape') return;
+  e.target.value = '';
+  e.target.dispatchEvent(new Event('input'));
+  e.target.blur();
+};
+$('keysBtn').onclick = () => $('keysDlg').showModal();
+$('feedCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('feedUrl').textContent); toast('Copied'); } catch { toast('Couldn\'t copy; select the address instead'); }
+};
+// J/K step through the to-do list (Enter opens one, X ticks it); X also works on a calendar item.
+function moveFocus(step) {
+  const titles = [...$('todo').querySelectorAll('.row .title')];
+  const i = titles.indexOf(document.activeElement.closest('.row')?.querySelector('.title'));
+  const next = titles[i < 0 ? 0 : Math.max(0, Math.min(titles.length - 1, i + step))];
+  next?.focus();
+  next?.scrollIntoView({ block: 'nearest' });
+}
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, textarea, dialog')) return;
-  if (e.key === 'Escape') hidePop();
-  else if (e.key === 'ArrowLeft') shift(-1);
-  else if (e.key === 'ArrowRight') shift(1);
-  else if (e.key.toLowerCase() === 'm') setCalView('month');
-  else if (e.key.toLowerCase() === 'w') setCalView('week');
-  else if (e.key.toLowerCase() === 't') { ui.view = null; render(); }
+  // Leave typing, dialogs and the browser's own shortcuts alone. Checkboxes are fine: J/K/X work from them.
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest('dialog')
+    || e.target.matches('input:not([type=checkbox]), textarea, select')) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (key === 'Escape') hidePop();
+  else if (key === 'ArrowLeft') shift(-1);
+  else if (key === 'ArrowRight') shift(1);
+  else if (key === 'm') setCalView('month');
+  else if (key === 'w') setCalView('week');
+  else if (key === 't') { ui.view = null; render(); }
+  else if (key === 'j') moveFocus(1);
+  else if (key === 'k') moveFocus(-1);
+  else if (key === '?') $('keysDlg').showModal();
+  else if (key === '/') { e.preventDefault(); $('search').focus(); }
+  else if (key === 'x') {
+    const it = data.items.find((i) => i.id === document.activeElement.closest('[data-id]')?.dataset.id);
+    if (it && it.kind !== 'Event') setDone([it], !isDone(it));
+  }
 });
+
+// ---------- reminders ----------
+// Checked each minute while UWCheck is open. Each deadline notifies once inside a day of it, and
+// again inside 2 hours. Remembered per browser, so a reload doesn't repeat them.
+const REMINDED = 'uwcheck-reminded';
+function remind() {
+  if (!ui.reminders || window.Notification?.permission !== 'granted') return;
+  let sent = {};
+  try { sent = JSON.parse(localStorage.getItem(REMINDED) || '{}'); } catch {}
+  const now = Date.now(), fresh = [];
+  for (const it of data.items) {
+    const hours = (new Date(it.due) - now) / 3600000;
+    // All-day items have no time to count down to.
+    if (hours <= 0 || hours > 24 || it.allDay || it.tentative || it.kind === 'Event' || isDone(it) || !shown(it)) continue;
+    const step = hours <= 2 ? 2 : 24;
+    if (sent[it.id] <= step) continue; // already reminded at this step or a closer one
+    sent[it.id] = step;
+    fresh.push(it);
+  }
+  // Forget deadlines that have passed, so this doesn't grow forever.
+  for (const id of Object.keys(sent)) {
+    const it = data.items.find((i) => i.id === id);
+    if (!it || new Date(it.due) < now) delete sent[id];
+  }
+  try { localStorage.setItem(REMINDED, JSON.stringify(sent)); } catch {}
+  if (!fresh.length) return;
+  const left = (it) => {
+    const h = (new Date(it.due) - now) / 3600000;
+    return h < 1 ? `in ${Math.max(1, Math.round(h * 60))} min` : `in ${Math.round(h)} h`;
+  };
+  // Several at once (say, on first switching this on) become one notification, not a pile.
+  const n = fresh.length === 1
+    ? new Notification(`${fresh[0].title} is due ${left(fresh[0])}`, { body: `${fresh[0].course} · ${fmtTime(fresh[0].due)}`, icon: '/icon-192.png' })
+    : new Notification(`${fresh.length} deadlines coming up`, {
+      body: fresh.sort(byDue).map((it) => `${it.course}: ${it.title} (${left(it)})`).join('\n'), icon: '/icon-192.png',
+    });
+  n.onclick = () => { window.focus(); n.close(); };
+}
+setInterval(remind, 60 * 1000);
+if (!window.Notification) $('remindBox').hidden = $('remindLabel').hidden = true;
+$('sRemind').onchange = async (e) => {
+  const box = e.target;
+  if (box.checked && Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted') {
+    box.checked = false;
+    $('remindNote').textContent = 'Notifications are blocked for UWCheck. Allow them in the browser\'s site settings (the icon left of the address, or ⋮ › Site settings in the app window), then try again.';
+    return;
+  }
+  ui.reminders = box.checked;
+  saveUi();
+  remind();
+};
 // Coming back to the tab syncs if the last sync is over 2 minutes old, so work you just
 // finished (say, an Ed lesson) shows as done. Otherwise it just picks up background syncs.
 window.addEventListener('focus', () => {
   const stale = isConnected() && Date.now() - new Date(data.lastSync || 0) > 2 * 60 * 1000;
   (stale ? api('/api/sync', {}) : Promise.resolve()).then(load).catch(() => {});
 });
-setInterval(() => load().catch(() => {}), 5 * 60 * 1000);
+setInterval(() => load(true).catch(() => {}), 5 * 60 * 1000);
 
 load().then(() => { if (!isConnected()) openSettings(); }).catch((e) => {
   $('todo').innerHTML = '<div class="empty"><strong>Can\'t reach the dashboard server</strong><span>Start it again with <code>npx uwcheck</code>, then reload this page.</span></div>';

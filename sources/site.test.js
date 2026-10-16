@@ -19,3 +19,11 @@ test('course website rows', () => {
     },
   ]);
 });
+
+test('a course website listed without a name is named from its URL', () => {
+  const { courseFromUrl } = require('./site');
+  assert.strictEqual(courseFromUrl('https://courses.cs.washington.edu/courses/cse351/26au/assignments.html'), 'CSE 351');
+  assert.strictEqual(courseFromUrl('https://courses.cs.washington.edu/courses/cse373h/26au/assignments.html'), 'CSE 373');
+  assert.strictEqual(courseFromUrl('https://example.edu/assignments.html'), 'example.edu');
+  assert.strictEqual(courseFromUrl('not a url'), 'not a url');
+});

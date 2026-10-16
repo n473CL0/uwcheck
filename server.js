@@ -137,6 +137,47 @@ function publicConfig() {
   return pub;
 }
 
+// ---------- calendar feed ----------
+
+// Lines over 75 bytes carry on after a line break and a space (RFC 5545), split between characters.
+function fold(line) {
+  let out = '', bytes = 0;
+  for (const ch of line) {
+    const n = Buffer.byteLength(ch);
+    if (bytes + n > 75) {
+      out += '\r\n ';
+      bytes = 1;
+    }
+    out += ch;
+    bytes += n;
+  }
+  return out;
+}
+
+// Your deadlines as an .ics feed, so a calendar app on this computer can subscribe to them.
+function calendarFeed(items = mergedItems()) {
+  const text = (s) => String(s).replace(/[\\;,]/g, '\\$&').replace(/\r?\n/g, '\\n');
+  const stamp = (d) => d.toISOString().replace(/[-:]|\.\d+/g, '');
+  const now = stamp(new Date());
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//UWCheck//EN', 'X-WR-CALNAME:UWCheck'];
+  for (const it of items) {
+    if (it.kind === 'Event') continue; // Canvas's own calendar already has its events
+    const done = state.done[it.id] ?? Boolean(it.completed);
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${text(it.id)}@uwcheck`,
+      `DTSTAMP:${now}`,
+      it.allDay ? `DTSTART;VALUE=DATE:${it.due.slice(0, 10).replace(/-/g, '')}` : `DTSTART:${stamp(new Date(it.due))}`,
+      `SUMMARY:${text(`${done ? '✓ ' : ''}${it.course}: ${it.title}`)}`,
+      ...(/^https?:\/\//i.test(it.url || '') ? [`URL:${it.url}`] : []),
+      ...(it.tentative ? ['STATUS:TENTATIVE'] : []),
+      'END:VEVENT',
+    );
+  }
+  lines.push('END:VCALENDAR');
+  return lines.map(fold).join('\r\n') + '\r\n';
+}
+
 // ---------- HTTP ----------
 
 function send(res, status, body, type = 'application/json') {
@@ -164,31 +205,39 @@ function readBody(req) {
   });
 }
 
+// A deadline you typed in, checked and tidied, for adding or editing.
+function customItem(it = {}, id) {
+  if (!it.title || !it.due) throw new Error('Title and date are required');
+  return {
+    id,
+    source: 'custom',
+    course: String(it.course || 'Personal').trim() || 'Personal',
+    title: String(it.title).trim(),
+    kind: String(it.kind || 'Task'),
+    due: new Date(it.due).toISOString(),
+    allDay: Boolean(it.allDay),
+    url: String(it.url || ''),
+  };
+}
+
 function applyStateAction(a) {
   switch (a.type) {
-    case 'done':
-      if (a.value === null) delete state.done[a.id];
-      else state.done[a.id] = Boolean(a.value);
+    case 'done': // { done: { id: true | false | null } }; null drops your tick, so the source's own status shows
+      for (const [id, value] of Object.entries(a.done || {})) {
+        if (value === null) delete state.done[id];
+        else state.done[id] = Boolean(value);
+      }
       break;
-    case 'doneMany':
-      for (const id of a.ids || []) state.done[id] = Boolean(a.value);
+    case 'color': // { colors: { course: '#rrggbb' } }
+      for (const [course, color] of Object.entries(a.colors || {})) state.colors[course] = String(color);
       break;
-    case 'color':
-      state.colors[a.course] = String(a.color);
+    case 'addCustom':
+      state.custom.push(customItem(a.item, `custom:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`));
       break;
-    case 'addCustom': {
-      const it = a.item || {};
-      if (!it.title || !it.due) throw new Error('Title and date are required');
-      state.custom.push({
-        id: `custom:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-        source: 'custom',
-        course: String(it.course || 'Personal').trim() || 'Personal',
-        title: String(it.title).trim(),
-        kind: String(it.kind || 'Task'),
-        due: new Date(it.due).toISOString(),
-        allDay: Boolean(it.allDay),
-        url: String(it.url || ''),
-      });
+    case 'editCustom': {
+      const i = state.custom.findIndex((x) => x.id === a.id);
+      if (i < 0) throw new Error('That deadline was deleted');
+      state.custom[i] = customItem(a.item, a.id);
       break;
     }
     case 'deleteCustom':
@@ -239,6 +288,13 @@ const server = http.createServer(async (req, res) => {
     const asset = req.method === 'GET' && STATIC[url.pathname];
     if (asset) return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', asset[0])), asset[1]);
     if (req.method === 'GET' && url.pathname === '/api/data') return send(res, 200, publicPayload());
+    if (req.method === 'GET' && url.pathname === '/calendar.ics') return send(res, 200, calendarFeed(), 'text/calendar; charset=utf-8');
+    if (req.method === 'POST' && url.pathname === '/api/update') {
+      if (!SELF_UPDATE) return send(res, 400, { error: `Run "${UPDATE_COMMAND}" in a terminal to update` });
+      await (updating ||= runUpdate().finally(() => { updating = null; }));
+      send(res, 200, { ok: true });
+      return setTimeout(restart, 500);
+    }
     if (req.method === 'POST' && url.pathname === '/api/quit') {
       send(res, 200, { ok: true });
       return setTimeout(() => process.exit(0), 100);
@@ -510,7 +566,42 @@ async function checkForUpdate() {
 
 function updateInfo() {
   if (!latestVersion || !isNewer(latestVersion, pkg.version)) return null;
-  return { latest: latestVersion, command: UPDATE_COMMAND, autoRestart: BACKGROUND };
+  return { latest: latestVersion, command: UPDATE_COMMAND, autoRestart: BACKGROUND, oneClick: SELF_UPDATE };
+}
+
+// The installed app can update itself: it runs the same command the README gives, then restarts.
+const SELF_UPDATE = BACKGROUND && ROOT === APP_DIR;
+let updating = null;
+
+function runUpdate() {
+  const bin = path.dirname(process.execPath);
+  const npx = path.join(bin, process.platform === 'win32' ? 'npx.cmd' : 'npx');
+  const env = { ...process.env };
+  // An app opened from the Dock gets a bare PATH, and npx needs to find node. (npx.cmd finds it by itself.)
+  if (process.platform !== 'win32') env.PATH = `${bin}:${env.PATH || ''}`;
+  const log = fs.openSync(path.join(DATA_DIR, 'server.log'), 'a');
+  const cmd = fs.existsSync(npx) ? npx : 'npx';
+  const args = ['--yes', 'uwcheck@latest', '--install'];
+  const win = process.platform === 'win32';
+  return new Promise((resolve, reject) => {
+    // Windows only runs .cmd files through a shell; elsewhere, no shell, so a "$" in the path stays literal.
+    // Nothing in the command comes from the page.
+    const child = spawn(win ? `"${cmd}" ${args.join(' ')}` : cmd, win ? [] : args, {
+      shell: win, env, stdio: ['ignore', log, log], windowsHide: true, timeout: 5 * 60 * 1000,
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve()
+      : reject(new Error(`The update didn't finish. Details are in ${path.join(DATA_DIR, 'server.log')}`))));
+  }).finally(() => fs.closeSync(log));
+}
+
+// Hands over to a fresh copy of the server, which loads whatever version is now installed.
+function restart() {
+  server.close(() => {
+    spawnBackground(process.argv.slice(2));
+    process.exit(0);
+  });
+  server.closeAllConnections();
 }
 
 // Once an update replaces these files, a background server restarts onto the new code;
@@ -527,13 +618,7 @@ function watchForInstall() {
     clearInterval(timer);
     if (!BACKGROUND) return console.log(`UWCheck ${version} is installed. Restart it to use the new version.`);
     // Give npm a moment to finish writing the rest of the files.
-    setTimeout(() => {
-      server.close(() => {
-        spawnBackground(process.argv.slice(2));
-        process.exit(0);
-      });
-      server.closeAllConnections();
-    }, 10 * 1000);
+    setTimeout(restart, 10 * 1000);
   }, 60 * 1000);
 }
 
@@ -594,4 +679,4 @@ if (require.main === module) {
   else startServer();
 }
 
-module.exports = { mergedItems, SOURCES, applyConfig, publicConfig, FILES };
+module.exports = { mergedItems, SOURCES, applyConfig, publicConfig, applyStateAction, calendarFeed, FILES };

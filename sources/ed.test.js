@@ -23,3 +23,30 @@ test('Ed lessons with a due date become items', () => {
     },
   ]);
 });
+
+test('Ed courses listed by id alone get their names from the account', async () => {
+  const { edCourseList } = require('./ed');
+  const realFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      courses: [
+        { course: { id: 1, code: 'CSE 351 - 26au', status: 'active' } },
+        { course: { id: 2, code: 'MATH 126', status: 'archived' } },
+        {},
+      ],
+    }),
+  });
+  try {
+    assert.deepStrictEqual(await edCourseList({ edCourses: [] }, 'us', {}), [{ id: 1, course: 'CSE 351' }]);
+    assert.deepStrictEqual(
+      await edCourseList({ edCourses: [{ id: 2, course: '' }, { id: 1, course: 'Systems' }, { id: 9, course: '' }, { id: 1, course: '1' }] }, 'us', {}),
+      [{ id: 2, course: 'MATH 126' }, { id: 1, course: 'Systems' }, { id: 9, course: '9' }, { id: 1, course: 'CSE 351' }],
+    );
+    global.fetch = () => assert.fail('no lookup needed when every course has a name');
+    assert.deepStrictEqual(await edCourseList({ edCourses: [{ id: 1, course: 'Systems' }] }, 'us', {}), [{ id: 1, course: 'Systems' }]);
+  } finally {
+    global.fetch = realFetch;
+  }
+});

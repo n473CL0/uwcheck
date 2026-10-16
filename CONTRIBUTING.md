@@ -26,7 +26,7 @@ UWCHECK_DATA=~/.uwcheck-dev node server.js --port 7352
 $env:UWCHECK_DATA = "$HOME\.uwcheck-dev"; node server.js --port 7352
 ```
 
-- **Changed `public/index.html`?** Refresh the browser. There's no build step.
+- **Changed `public/index.html`?** Refresh the browser. There's no build step. Then run `npm run smoke`, which clicks through the page in headless Chrome (it needs Chrome and Node 22+).
 - **Changed `server.js` or a source?** Stop the server with Ctrl+C and start it again.
 
 ## Ground rules
@@ -107,7 +107,7 @@ Test your parse function on a **small, real sample** of what the service returns
 
 ### 4. Settings
 
-Add a field for each setting to the **Connect your courses** dialog in `public/index.html`: the input in `#setForm`, the line that fills it in `openSettings()`, and the line that sends it in the form's `submit` handler. For a secret, follow how `edToken` works: leave the input blank to keep the saved value, and use `clearEdToken` to remove it. The server only saves settings your source lists in `config`, and only when the type matches the default.
+Add a field for each setting to the **Settings** dialog in `public/index.html`: the input in `#setForm`, the line that fills it in `openSettings()`, and the line that sends it in the form's `submit` handler. For a secret, follow how `edToken` works: leave the input blank to keep the saved value, and use `clearEdToken` to remove it. The server only saves settings your source lists in `config`, and only when the type matches the default.
 
 ### 5. README
 
@@ -115,7 +115,7 @@ Add a short "how to connect" note under **Install** or **Optional**.
 
 ## Before you open a pull request
 
-- `npm test` passes.
+- `npm test` passes, and `npm run smoke` too if you changed the page.
 - You ran it with real data (in your dev folder) and the items land on the right days.
 - No tokens, feed URLs or classmates' names in the code, tests or screenshots.
 

@@ -39,7 +39,8 @@
   ],
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "smoke": "node smoke.js"
   },
   "engines": {
     "node": ">=18"
