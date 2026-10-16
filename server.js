@@ -407,13 +407,27 @@ function launcherArgs() {
   return [__filename, '--app', ...(argValue('--port') ? ['--port', argValue('--port')] : [])];
 }
 
-async function isRunning() {
+// The version of the UWCheck answering on this port, or null if none is.
+async function runningVersion() {
   try {
     const res = await fetch(`http://127.0.0.1:${PORT}/api/data`, { signal: AbortSignal.timeout(1500) });
-    return res.ok && Array.isArray((await res.json()).items);
+    const data = await res.json();
+    return res.ok && Array.isArray(data.items) ? String(data.version) : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+const isRunning = async () => (await runningVersion()) !== null;
+
+// Stops the UWCheck running on this port and starts this copy in its place. Any open window
+// switches over the next time it loads (it reloads when the version changes).
+async function takeOver(from) {
+  await stopServer();
+  for (let i = 0; i < 20 && (await isRunning()); i++) await sleep(250);
+  spawnBackground(['--no-open', '--background', '--port', String(PORT)]);
+  for (let i = 0; i < 40 && !(await isRunning()); i++) await sleep(250);
+  console.log(`Replaced UWCheck ${from}, which was still running, with ${pkg.version}.`);
 }
 
 function spawnBackground(args) {
@@ -531,7 +545,12 @@ Categories=Office;Calendar;
   for (const p of paths) console.log(`  ${p}`);
   console.log('\nOpen it like any other app. It starts UWCheck in the background when needed.');
   // Open it on a first install; an update leaves the window that's already open alone.
-  if (!(await isRunning())) await launchApp();
+  const running = await runningVersion();
+  if (!running) return launchApp();
+  // A different version still running (say, an old `npm install -g` copy) would keep this port, and
+  // the new app would open onto it. Not when the app's own Update button is installing: that server
+  // restarts itself afterwards, and stopping it now would stop this install too.
+  if (running !== pkg.version && !process.env.UWCHECK_UPDATING) await takeOver(running);
 }
 
 async function uninstallApp() {
@@ -576,7 +595,8 @@ let updating = null;
 function runUpdate() {
   const bin = path.dirname(process.execPath);
   const npx = path.join(bin, process.platform === 'win32' ? 'npx.cmd' : 'npx');
-  const env = { ...process.env };
+  // UWCHECK_UPDATING tells the install not to stop this server, which is waiting for it to finish.
+  const env = { ...process.env, UWCHECK_UPDATING: '1' };
   // An app opened from the Dock gets a bare PATH, and npx needs to find node. (npx.cmd finds it by itself.)
   if (process.platform !== 'win32') env.PATH = `${bin}:${env.PATH || ''}`;
   const log = fs.openSync(path.join(DATA_DIR, 'server.log'), 'a');
@@ -679,4 +699,4 @@ if (require.main === module) {
   else startServer();
 }
 
-module.exports = { mergedItems, SOURCES, applyConfig, publicConfig, applyStateAction, calendarFeed, FILES };
+module.exports = { mergedItems, SOURCES, applyConfig, publicConfig, applyStateAction, calendarFeed, takeOver, FILES };

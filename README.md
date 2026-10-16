@@ -42,6 +42,8 @@ That's it. From now on, open **UWCheck** like any other app: search for it in th
 | `npx uwcheck@latest --uninstall` | Remove the app. Your settings are kept. |
 | `npx uwcheck@latest` | Use UWCheck without installing the app. Keep the terminal open while you do. |
 
+Does `uwcheck --version` show an old version? That's a copy from an older `npm install -g uwcheck`. The app doesn't use it, so remove it with `npm uninstall -g uwcheck`.
+
 ## Optional: course websites
 
 UW CSE courses often list work on their `assignments.html` page before it's released on Ed. Add them under **Options → Your courses → Course websites**, one per line:
