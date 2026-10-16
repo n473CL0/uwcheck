@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Clicks through the page in headless Chrome: what `npm test` can't see. First-run setup, Enter to
-// save, ticking with Undo, the Overdue groups, closing Settings. Uses made-up Canvas and course-site
+// save, ticking with Undo, the Overdue groups, the Options menu and window. Uses made-up Canvas and course-site
 // pages served from here, and a throwaway data folder. Needs Chrome and Node 22+ (for WebSocket).
 // Run: npm run smoke   (set CHROME=/path/to/chrome if it isn't found)
 'use strict';
@@ -74,7 +74,8 @@ async function browser(profile) {
   return {
     send, ev, close: () => ws.close(),
     async click(selector) {
-      const at = await ev(`(() => { const b = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return b && b.width ? [b.x + b.width / 2, b.y + b.height / 2] : null; })()`);
+      // Scrolled to the middle first, as a person would, so nothing pinned (like the Save bar) covers it.
+      const at = await ev(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el?.scrollIntoView({ block: 'center' }); const b = el?.getBoundingClientRect(); return b && b.width ? [b.x + b.width / 2, b.y + b.height / 2] : null; })()`);
       assert.ok(at, `nothing to click at ${selector}`);
       const [x, y] = at;
       for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
@@ -113,7 +114,6 @@ async function main() {
     await b.send('Page.navigate', { url: `http://localhost:${port}/` });
     await until(() => b.ev(`$('setDlg').open`), 'Settings to open on first run');
 
-    await b.click('#setDlg details.adv summary');
     await b.click('#sSites');
     await b.type(`${site}/courses/cse351/${YY}au/assignments.html?v=1`);
     await b.click('#sEdCourses');
@@ -144,9 +144,13 @@ async function main() {
     assert.ok(await b.ev(`![...document.querySelectorAll('#todo .row')].find((r) => r.textContent.includes('Read ch. 4')).querySelector('.when').classList.contains('late')`),
       'an all-day deadline is not late on its own day');
 
-    await b.click('#settingsBtn');
+    await b.click('#optionsBtn');
+    await b.click('#optMenu [data-open="keys"]');
+    assert.ok(await b.ev(`$('setDlg').open && !$('pane-keys').hidden && $('optMenu').hidden`), 'the Options menu opens that section');
+    await b.click('#tab-prefs');
+    assert.ok(await b.ev(`!$('pane-prefs').hidden && $('pane-keys').hidden`), 'the section list switches sections');
     await b.click('#setDlg .dlg-head [data-close]');
-    assert.ok(!await b.ev(`$('setDlg').open`), 'the X closes Settings');
+    assert.ok(!await b.ev(`$('setDlg').open`), 'the X closes Options');
     console.log('Smoke test passed.');
   } catch (e) {
     if (chromeLog) console.error(`Chrome said:\n${chromeLog}`);

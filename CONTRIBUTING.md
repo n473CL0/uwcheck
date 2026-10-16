@@ -105,9 +105,9 @@ Add `require('./sources/<name>')` to `SOURCES` near the top of `server.js`. The 
 
 Test your parse function on a **small, real sample** of what the service returns, with names, IDs and tokens replaced. See [`sources/canvas.test.js`](sources/canvas.test.js). `npm test` picks it up automatically and also checks that your module follows the shape above.
 
-### 4. Settings
+### 4. Options
 
-Add a field for each setting to the **Settings** dialog in `public/index.html`: the input in `#setForm`, the line that fills it in `openSettings()`, and the line that sends it in the form's `submit` handler. For a secret, follow how `edToken` works: leave the input blank to keep the saved value, and use `clearEdToken` to remove it. The server only saves settings your source lists in `config`, and only when the type matches the default.
+Add a field for each setting to **Options → Your courses** in `public/index.html` (`#pane-courses`, under a heading for your source): the input, the line that fills it in `openOptions()`, and the line that sends it in the form's `submit` handler. For a secret, follow how `edToken` works: leave the input blank to keep the saved value, and use `clearEdToken` to remove it. The server only saves settings your source lists in `config`, and only when the type matches the default.
 
 ### 5. README
 

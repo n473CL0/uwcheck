@@ -70,6 +70,8 @@
   @font-face { font-family: "Open Sans"; src: url(/fonts/open-sans.woff2) format("woff2"); font-weight: 300 800; font-display: swap; }
   @font-face { font-family: "Encode Sans"; src: url(/fonts/encode-sans.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
   * { box-sizing: border-box; }
+  /* hidden always hides, even on elements whose class sets a display. */
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; }
   body {
     background: var(--bg); color: var(--text);
@@ -207,7 +209,6 @@
   .chip.missed { box-shadow: inset 2px 0 0 var(--danger); }
   .chip.missed .t { color: var(--danger); }
   .chip, .more { flex: none; }
-  .chip[hidden], .more[hidden] { display: none; }
   .day { overflow: hidden; min-height: 0; }
   .more {
     border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600;
@@ -335,29 +336,68 @@
   .field textarea { font: 12.5px/1.5 ui-monospace, Consolas, monospace; min-height: 64px; resize: vertical; }
   .inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-  .dlg-head { display: flex; align-items: center; justify-content: space-between; margin: -6px -10px 0 0; }
-  /* Settings is long enough to scroll: keep Close and Save in sight at the bottom. */
-  .dlg-actions.sticky {
-    position: sticky; bottom: -24px; margin: 0 -24px -24px; padding: 12px 24px 24px;
-    background: var(--surface); border-top: 1px solid var(--line);
-  }
-  details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-  details.adv[open] summary { margin-bottom: 12px; }
-  details.adv[open] { display: flex; flex-direction: column; gap: 16px; }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; }
+  .field .check { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; color: var(--muted); }
+  .field .check input { width: auto; padding: 0; accent-color: var(--accent); }
   .err { color: var(--danger); font-size: 13px; }
   .err:empty { display: none; }
-  dialog hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+
+  /* Options menu: drops down under its button, like a desktop app's File menu. */
+  .menu-wrap { position: relative; }
+  .caret-d { font-size: 10px; }
+  .menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 25; min-width: 240px;
+    display: flex; flex-direction: column; padding: 6px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-panel); box-shadow: var(--shadow);
+  }
+  .menu button {
+    display: flex; justify-content: space-between; align-items: center; gap: 24px;
+    border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: var(--r-ctl); font-size: 13.5px;
+  }
+  .menu button:hover, .menu button:focus-visible { background: var(--surface-2); outline: none; }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
+  .menu kbd { font-size: 11px; min-width: 18px; padding: 2px 5px; color: var(--muted); }
+
+  /* Options window: same size whichever section is open, section list on the left. */
+  #setDlg { width: min(760px, calc(100vw - 32px)); height: min(600px, calc(100vh - 48px)); }
+  #setDlg form { padding: 0; gap: 0; height: 100%; }
+  #setDlg .dlg-head { padding: 12px 12px 12px 24px; border-bottom: 1px solid var(--line); }
+  .opt { flex: 1; min-height: 0; display: grid; grid-template-columns: 188px minmax(0, 1fr); }
+  .opt-nav {
+    display: flex; flex-direction: column; gap: 2px; padding: 12px;
+    border-right: 1px solid var(--line); background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+  }
+  .opt-nav button {
+    border: 0; background: none; text-align: left; white-space: nowrap;
+    padding: 7px 10px; border-radius: var(--r-ctl); color: var(--muted); font-size: 13.5px;
+  }
+  .opt-nav button:hover { color: var(--text); }
+  /* The chosen section looks like a pressed switch button (.seg). */
+  .opt-nav button[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(36, 40, 46, .12); }
+  .opt-pane { overflow: auto; padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+  /* A group heading with a rule running to the right edge. */
+  .grp { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .grp::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .opt-pane > .grp:first-child { margin-top: 0; }
+  /* Save & sync stays in sight at the bottom of Your courses while the fields scroll. */
+  .opt-foot {
+    position: sticky; bottom: -24px; margin: auto -24px -24px; padding: 12px 24px 16px;
+    display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+    background: var(--surface); border-top: 1px solid var(--line);
+  }
+  .opt-foot .err { margin-right: auto; }
+
   /* Preferences that apply right away, as label / control pairs. */
-  .prefs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 14px 16px; align-items: baseline; font-size: 13px; }
+  .prefs { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px 16px; align-items: baseline; font-size: 13px; }
   .prefs > .k { font-weight: 600; }
   .prefs > .seg { justify-self: start; }
-  .prefs > [hidden] { display: none; }
   .prefs label { display: inline-flex; gap: 6px; align-items: center; }
   .prefs input[type=checkbox] { accent-color: var(--accent); }
   .prefs .help { color: var(--muted); font-size: 12.5px; }
   .prefs .feed { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .prefs code { font-size: 12px; background: var(--surface-2); padding: 2px 6px; border-radius: 4px; overflow-wrap: anywhere; }
-  .keys { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; margin: 0; font-size: 13.5px; }
+  /* A fixed key column, so the descriptions line up across groups. */
+  .keys { display: grid; grid-template-columns: 96px 1fr; gap: 10px 16px; margin: 0; font-size: 13.5px; }
   .keys dt { white-space: nowrap; }
   .keys dd { margin: 0; color: var(--muted); }
   kbd {
@@ -372,7 +412,6 @@
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast button { pointer-events: auto; border: 0; background: none; color: inherit; font-weight: 700; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
-  .toast button[hidden] { display: none; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; }
@@ -395,7 +434,13 @@
     .chip .go { padding: 2px 4px; }
     .chip .tick, .chip .t, .chip .cs { display: none; }
     .prefs { grid-template-columns: 1fr; gap: 4px; }
-    .prefs > .k:not(:first-child) { margin-top: 8px; }
+    /* Phones: the section list becomes a row of tabs across the top. */
+    #setDlg { height: calc(100vh - 32px); }
+    .opt { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .opt-nav { flex-direction: row; overflow-x: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .opt-nav button { padding: 6px 8px; font-size: 13px; }
+    .opt-pane { padding: 16px 16px 24px; }
+    .opt-foot { margin: auto -16px -24px; padding: 12px 16px 16px; }
     .cal-head { flex-wrap: wrap; }
     .cal-head h2 { min-width: 0; font-size: 17px; }
     /* Week view stacks the days on phones, so titles get the full width. */
@@ -418,7 +463,15 @@
   <div class="spacer"></div>
   <input class="search" id="search" type="search" placeholder="Search  ( / )" aria-label="Search deadlines" autocomplete="off">
   <button class="btn" id="syncBtn" title="Fetch the latest deadlines">Sync</button>
-  <button class="btn ghost" id="settingsBtn" title="Courses, theme, reminders">Settings</button>
+  <div class="menu-wrap">
+    <button class="btn ghost" id="optionsBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="optMenu">Options <span class="caret-d" aria-hidden="true">▾</span></button>
+    <div class="menu" id="optMenu" role="menu" aria-label="Options" hidden>
+      <button role="menuitem" data-open="courses">Your courses…</button>
+      <button role="menuitem" data-open="prefs">Preferences…</button>
+      <hr>
+      <button role="menuitem" data-open="keys">Keyboard shortcuts… <kbd>?</kbd></button>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -491,84 +544,107 @@
   </form>
 </dialog>
 
-<dialog id="setDlg">
+<!-- Options: one window, a section list on the left. Your courses are saved with Save & sync;
+     preferences apply as soon as you change them. -->
+<dialog id="setDlg" aria-labelledby="optTitle">
   <form method="dialog" id="setForm">
     <div class="dlg-head">
-      <h2>Settings</h2>
+      <h2 id="optTitle">Options</h2>
       <button class="btn ghost icon" type="button" data-close aria-label="Close" title="Close (Esc)">✕</button>
     </div>
-    <div class="field">
-      <label for="sCanvas">Canvas calendar feed URL</label>
-      <input id="sCanvas" placeholder="https://canvas.uw.edu/feeds/calendars/user_….ics">
-      <div class="help">In Canvas open <b>Calendar</b>, then click <b>Calendar Feed</b> at the bottom right and copy the link. This pulls every assignment and quiz across all your courses.</div>
-    </div>
-    <div class="field">
-      <label for="sEd">Ed API token</label>
-      <input id="sEd" type="password" autocomplete="off">
-      <div class="help">Create one at <a href="https://edstem.org/us/settings/api-tokens" target="_blank" rel="noopener">edstem.org, under Settings, API Tokens</a>. Stored only on this computer, in <code>~/.uwcheck/config.json</code>. <label id="edState" hidden><input type="checkbox" id="sEdClear"> Remove the saved token</label></div>
-    </div>
-    <details class="adv">
-      <summary>Advanced: course mappings</summary>
-      <div class="field">
-        <label for="sEdCourses">Ed courses <span class="help">(one course id per line; add <code>= name</code> to rename)</span></label>
-        <textarea id="sEdCourses"></textarea>
-        <div class="help">Leave empty to include every active Ed course. The id is the number in <code>edstem.org/us/courses/<b>107500</b>/lessons</code>.</div>
+    <div class="opt">
+      <div class="opt-nav" id="optNav" role="tablist" aria-orientation="vertical" aria-label="Options">
+        <button type="button" role="tab" id="tab-courses" data-tab="courses" aria-controls="pane-courses">Your courses</button>
+        <button type="button" role="tab" id="tab-prefs" data-tab="prefs" aria-controls="pane-prefs">Preferences</button>
+        <button type="button" role="tab" id="tab-keys" data-tab="keys" aria-controls="pane-keys">Keyboard shortcuts</button>
       </div>
-      <div class="field">
-        <label for="sSites">Course websites <span class="help">(one URL per line; add <code>= name</code> to rename)</span></label>
-        <textarea id="sSites" placeholder="https://courses.cs.washington.edu/courses/cse351/26au/assignments.html"></textarea>
-        <div class="help">UW CSE <code>assignments.html</code> pages. They list work before it's released on Ed.</div>
-      </div>
-      <div class="field">
-        <label for="sCanvasCourses">Canvas course names <span class="help">(optional rename: canvas course id = name)</span></label>
-        <textarea id="sCanvasCourses"></textarea>
-      </div>
-    </details>
-    <hr>
-    <!-- These apply as soon as you change them; Save is only for the course settings above. -->
-    <div class="prefs">
-      <span class="k">Theme</span>
-      <div class="seg" role="group" aria-label="Theme">
-        <button type="button" id="thAuto" title="Match this device's light or dark setting">Auto</button>
-        <button type="button" id="thLight" title="Always light">Light</button>
-        <button type="button" id="thDark" title="Always dark">Dark</button>
-      </div>
-      <span class="k" id="remindLabel">Reminders</span>
-      <div id="remindBox">
-        <label><input type="checkbox" id="sRemind"> Notify me a day and 2 hours before each deadline</label>
-        <div class="help" id="remindNote">Only while UWCheck is open. Skips hidden courses and types.</div>
-      </div>
-      <span class="k">Calendar apps</span>
-      <div>
-        <div class="feed"><code id="feedUrl"></code><button type="button" class="btn" id="feedCopy">Copy</button></div>
-        <div class="help">Paste it into a calendar app on this computer, such as Apple Calendar (On My Mac) or Outlook. Google Calendar can't reach it.</div>
-      </div>
-      <span class="k">Shortcuts</span>
-      <div><button type="button" class="btn" id="keysBtn">Keyboard shortcuts</button> <span class="help">or press <kbd>?</kbd></span></div>
-    </div>
-    <div class="err" id="setErr"></div>
-    <div class="dlg-actions sticky">
-      <button class="btn" type="button" data-close>Close</button>
-      <button class="btn primary" value="ok" id="setOk">Save &amp; sync</button>
-    </div>
-  </form>
-</dialog>
 
-<dialog id="keysDlg">
-  <form method="dialog">
-    <h2>Keyboard shortcuts</h2>
-    <dl class="keys">
-      <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous or next month (or week)</dd>
-      <dt><kbd>T</kbd></dt><dd>Jump to today</dd>
-      <dt><kbd>M</kbd> <kbd>W</kbd></dt><dd>Month or week view</dd>
-      <dt><kbd>/</kbd></dt><dd>Search</dd>
-      <dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>Next or previous item in the to-do list</dd>
-      <dt><kbd>X</kbd></dt><dd>Tick or untick the selected item</dd>
-      <dt><kbd>Enter</kbd></dt><dd>Open the selected item's details</dd>
-      <dt><kbd>Esc</kbd></dt><dd>Close a popup, or clear the search</dd>
-      <dt><kbd>?</kbd></dt><dd>Show this list</dd>
-    </dl>
-    <div class="dlg-actions"><button class="btn primary" value="ok">Done</button></div>
+      <div class="opt-pane" role="tabpanel" id="pane-courses" aria-labelledby="tab-courses">
+        <!-- wrap=off on the lists: one entry per line, so a long URL shouldn't look like two. -->
+        <h3 class="grp">Canvas</h3>
+        <div class="field">
+          <label for="sCanvas">Calendar feed</label>
+          <input id="sCanvas" placeholder="https://canvas.uw.edu/feeds/calendars/user_….ics">
+          <div class="help">In Canvas, open <b>Calendar</b>, click <b>Calendar Feed</b> at the bottom right, and copy the link. It brings in every assignment and quiz from all your courses.</div>
+        </div>
+        <div class="field">
+          <label for="sCanvasCourses">Course names <span class="help">(optional)</span></label>
+          <textarea id="sCanvasCourses" wrap="off" placeholder="1234567 = CSE 351"></textarea>
+          <div class="help">Rename Canvas courses, one per line: the number in <code>canvas.uw.edu/courses/<b>1234567</b></code>, then <code>= name</code>.</div>
+        </div>
+        <h3 class="grp">Ed</h3>
+        <div class="field">
+          <label for="sEd">API token <span class="help">(optional)</span></label>
+          <input id="sEd" type="password" autocomplete="off">
+          <div class="help">Create one at <a href="https://edstem.org/us/settings/api-tokens" target="_blank" rel="noopener">edstem.org, under Settings, API Tokens</a>. It's stored only on this computer, in <code>~/.uwcheck/config.json</code>.</div>
+          <label class="check" id="edState" hidden><input type="checkbox" id="sEdClear"> Remove the saved token</label>
+        </div>
+        <div class="field">
+          <label for="sEdCourses">Courses <span class="help">(optional)</span></label>
+          <textarea id="sEdCourses" wrap="off" placeholder="107500"></textarea>
+          <div class="help">Leave empty for all your active Ed courses, or list some, one per line: the number in <code>edstem.org/us/courses/<b>107500</b></code> (pasting the link works too). Add <code>= name</code> to rename one.</div>
+        </div>
+        <h3 class="grp">Course websites</h3>
+        <div class="field">
+          <label for="sSites">Pages <span class="help">(optional)</span></label>
+          <textarea id="sSites" wrap="off" placeholder="https://courses.cs.washington.edu/courses/cse351/26au/assignments.html"></textarea>
+          <div class="help">UW CSE <code>assignments.html</code> pages, one per line. They list work before it's on Ed. The course name comes from the address; add <code>= name</code> after it to pick another.</div>
+        </div>
+        <div class="opt-foot">
+          <div class="err" id="setErr"></div>
+          <button class="btn primary" value="ok" id="setOk">Save &amp; sync</button>
+        </div>
+      </div>
+
+      <div class="opt-pane" role="tabpanel" id="pane-prefs" aria-labelledby="tab-prefs" hidden>
+        <h3 class="grp">Appearance</h3>
+        <div class="prefs">
+          <span class="k">Theme</span>
+          <div class="seg" role="group" aria-label="Theme">
+            <button type="button" id="thAuto" title="Match this device's light or dark setting">Auto</button>
+            <button type="button" id="thLight" title="Always light">Light</button>
+            <button type="button" id="thDark" title="Always dark">Dark</button>
+          </div>
+        </div>
+        <h3 class="grp" id="remindLabel">Reminders</h3>
+        <div class="prefs" id="remindBox">
+          <span class="k">Notify me</span>
+          <div>
+            <label><input type="checkbox" id="sRemind"> A day and 2 hours before each deadline</label>
+            <div class="help" id="remindNote">Only while UWCheck is open. Skips hidden courses and types.</div>
+          </div>
+        </div>
+        <h3 class="grp">Calendar apps</h3>
+        <div class="prefs">
+          <span class="k">Feed address</span>
+          <div>
+            <div class="feed"><code id="feedUrl"></code><button type="button" class="btn" id="feedCopy">Copy</button></div>
+            <div class="help">Paste it into a calendar app on this computer, such as Apple Calendar (On My Mac) or Outlook. Google Calendar can't reach it.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="opt-pane" role="tabpanel" id="pane-keys" aria-labelledby="tab-keys" hidden>
+        <h3 class="grp">Calendar</h3>
+        <dl class="keys">
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous or next month (or week)</dd>
+          <dt><kbd>T</kbd></dt><dd>Jump to today</dd>
+          <dt><kbd>M</kbd> <kbd>W</kbd></dt><dd>Month or week view</dd>
+        </dl>
+        <h3 class="grp">To-do list</h3>
+        <dl class="keys">
+          <dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>Next or previous item</dd>
+          <dt><kbd>X</kbd></dt><dd>Tick or untick the selected item</dd>
+          <dt><kbd>Enter</kbd></dt><dd>Open the selected item's details</dd>
+        </dl>
+        <h3 class="grp">Anywhere</h3>
+        <dl class="keys">
+          <dt><kbd>/</kbd></dt><dd>Search</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close a popup, or clear the search</dd>
+          <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+        </dl>
+      </div>
+    </div>
   </form>
 </dialog>
 
@@ -729,7 +805,7 @@ function renderSources() {
     b.title = tip;
     b.innerHTML = '<span class="dot"></span>';
     b.append(label);
-    b.onclick = () => (cls === 'ok' ? toast(tip) : openSettings());
+    b.onclick = () => (cls === 'ok' ? toast(tip) : openOptions());
     box.append(b);
   }
   if (data.lastSync) {
@@ -1071,7 +1147,7 @@ function renderTodo() {
       go.className = 'btn primary';
       go.textContent = 'Connect courses';
       go.style.margin = '12px auto 0';
-      go.onclick = openSettings;
+      go.onclick = () => openOptions();
       e.append(go);
     } else if (ui.q) {
       head.textContent = 'Nothing matches your search';
@@ -1252,7 +1328,10 @@ function hidePop() {
   popRefresh = null;
 }
 // A click outside closes it; Undo on the toast doesn't count, since it changes what the popup shows.
-document.addEventListener('click', (e) => { if (!pop.contains(e.target) && !$('toast').contains(e.target)) hidePop(); });
+document.addEventListener('click', (e) => {
+  if (!pop.contains(e.target) && !$('toast').contains(e.target)) hidePop();
+  if (!e.target.closest('.menu-wrap')) closeMenu();
+});
 
 // ---------- add dialog ----------
 // With item: edit that deadline (one you added) instead of adding a new one.
@@ -1295,8 +1374,59 @@ $('addDlg').addEventListener('close', () => {
 // Cancel buttons are type=button so Enter in a field saves instead; they close their dialog here.
 for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => b.closest('dialog').close('cancel');
 
-// ---------- settings ----------
-function openSettings() {
+// ---------- options ----------
+// The menu under the Options button.
+const menu = $('optMenu');
+function openMenu(focusFirst) {
+  menu.hidden = false;
+  $('optionsBtn').setAttribute('aria-expanded', 'true');
+  if (focusFirst) menu.querySelector('[role=menuitem]').focus();
+}
+function closeMenu(refocus) {
+  if (menu.hidden) return;
+  menu.hidden = true;
+  $('optionsBtn').setAttribute('aria-expanded', 'false');
+  if (refocus) $('optionsBtn').focus();
+}
+// Opened from the keyboard (Enter or Space, so no mouse "detail"), it puts focus on the first item.
+$('optionsBtn').onclick = (e) => { e.stopPropagation(); menu.hidden ? openMenu(e.detail === 0) : closeMenu(); };
+$('optionsBtn').onkeydown = (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); openMenu(true); } };
+menu.onclick = (e) => { const item = e.target.closest('[data-open]'); if (item) openOptions(item.dataset.open); };
+menu.onkeydown = (e) => {
+  const items = [...menu.querySelectorAll('[role=menuitem]')];
+  const i = items.indexOf(document.activeElement);
+  const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (to !== undefined) {
+    e.preventDefault();
+    items[(to + items.length) % items.length].focus();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeMenu(true);
+  } else if (e.key === 'Tab') closeMenu();
+};
+
+// The Options window: one section showing at a time, picked from the list on the left.
+const TABS = ['courses', 'prefs', 'keys'];
+function showTab(tab, focus) {
+  for (const t of TABS) {
+    $(`tab-${t}`).setAttribute('aria-selected', t === tab);
+    $(`tab-${t}`).tabIndex = t === tab ? 0 : -1;
+    $(`pane-${t}`).hidden = t !== tab;
+  }
+  if (focus) $(`tab-${tab}`).focus();
+}
+for (const t of TABS) $(`tab-${t}`).onclick = () => showTab(t);
+$('optNav').onkeydown = (e) => {
+  const i = TABS.indexOf(document.activeElement.dataset.tab);
+  const to = { ArrowDown: i + 1, ArrowUp: i - 1, ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 }[e.key];
+  if (i < 0 || to === undefined) return;
+  e.preventDefault();
+  showTab(TABS[(to + TABS.length) % TABS.length], true);
+};
+
+// tab: 'courses', 'prefs' or 'keys'. Course fields are filled fresh each time, dropping unsaved edits.
+function openOptions(tab = 'courses') {
+  closeMenu();
   hidePop();
   const c = data.config;
   $('setErr').textContent = '';
@@ -1311,7 +1441,9 @@ function openSettings() {
   $('sCanvasCourses').value = Object.entries(c.canvasCourses || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
   $('sRemind').checked = ui.reminders && window.Notification?.permission === 'granted';
   $('feedUrl').textContent = `${location.origin}/calendar.ics`;
-  $('setDlg').showModal();
+  showTab(tab);
+  if (!$('setDlg').open) $('setDlg').showModal();
+  $(`tab-${tab}`).focus();
 }
 // "key = name" per line. A line with no name gives '', and the server picks one (from the URL, or Ed).
 function pairs(text) {
@@ -1418,7 +1550,6 @@ $('viewMonth').onclick = () => setCalView('month');
 $('viewWeek').onclick = () => setCalView('week');
 $('todayBtn').onclick = () => { ui.view = null; render(); };
 $('syncBtn').onclick = sync;
-$('settingsBtn').onclick = openSettings;
 $('addBtn').onclick = () => openAdd();
 // Same rule as the script in <head>; this one also follows the device when it switches.
 const deviceDark = matchMedia('(prefers-color-scheme: dark)');
@@ -1441,7 +1572,6 @@ $('search').onkeydown = (e) => {
   e.target.dispatchEvent(new Event('input'));
   e.target.blur();
 };
-$('keysBtn').onclick = () => $('keysDlg').showModal();
 $('feedCopy').onclick = async () => {
   try { await navigator.clipboard.writeText($('feedUrl').textContent); toast('Copied'); } catch { toast('Couldn\'t copy; select the address instead'); }
 };
@@ -1455,7 +1585,7 @@ function moveFocus(step) {
 }
 document.addEventListener('keydown', (e) => {
   // Leave typing, dialogs and the browser's own shortcuts alone. Checkboxes are fine: J/K/X work from them.
-  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest('dialog')
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest('dialog, .menu')
     || e.target.matches('input:not([type=checkbox]), textarea, select')) return;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (key === 'Escape') hidePop();
@@ -1466,7 +1596,7 @@ document.addEventListener('keydown', (e) => {
   else if (key === 't') { ui.view = null; render(); }
   else if (key === 'j') moveFocus(1);
   else if (key === 'k') moveFocus(-1);
-  else if (key === '?') $('keysDlg').showModal();
+  else if (key === '?') openOptions('keys');
   else if (key === '/') { e.preventDefault(); $('search').focus(); }
   else if (key === 'x') {
     const it = data.items.find((i) => i.id === document.activeElement.closest('[data-id]')?.dataset.id);
@@ -1532,7 +1662,7 @@ window.addEventListener('focus', () => {
 });
 setInterval(() => load(true).catch(() => {}), 5 * 60 * 1000);
 
-load().then(() => { if (!isConnected()) openSettings(); }).catch((e) => {
+load().then(() => { if (!isConnected()) openOptions(); }).catch((e) => {
   $('todo').innerHTML = '<div class="empty"><strong>Can\'t reach the dashboard server</strong><span>Start it again with <code>npx uwcheck</code>, then reload this page.</span></div>';
   console.error(e);
 });
