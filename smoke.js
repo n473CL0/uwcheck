@@ -51,7 +51,7 @@ async function until(check, what, ms = 10000) {
 // Just enough of the Chrome DevTools Protocol: run JS in the page, click, type, press keys.
 async function browser(profile) {
   const portFile = path.join(profile, 'DevToolsActivePort');
-  await until(() => fs.existsSync(portFile) && fs.readFileSync(portFile, 'utf8').includes('\n'), 'Chrome to start');
+  await until(() => fs.existsSync(portFile) && fs.readFileSync(portFile, 'utf8').includes('\n'), 'Chrome to start', 30000);
   const port = fs.readFileSync(portFile, 'utf8').split('\n')[0];
   const page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === 'page');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -99,8 +99,11 @@ async function main() {
     env: { ...process.env, UWCHECK_DATA: path.join(tmp, 'data'), UWCHECK_NO_UPDATE_CHECK: '1' }, stdio: 'ignore',
   });
   const profile = path.join(tmp, 'chrome');
-  const chrome = spawn(CHROME, ['--headless=new', '--no-sandbox', '--no-first-run', '--remote-debugging-port=0',
-    `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], { stdio: 'ignore' });
+  const chrome = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run',
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let chromeLog = '';
+  chrome.stderr.on('data', (d) => { chromeLog = (chromeLog + d).slice(-4000); });
+  chrome.on('exit', (code) => { if (code) chromeLog += `\nChrome exited with code ${code}`; });
   let b;
   try {
     await until(async () => (await fetch(`http://127.0.0.1:${port}/api/data`)).ok, 'UWCheck to start');
@@ -145,6 +148,9 @@ async function main() {
     await b.click('#setDlg .dlg-head [data-close]');
     assert.ok(!await b.ev(`$('setDlg').open`), 'the X closes Settings');
     console.log('Smoke test passed.');
+  } catch (e) {
+    if (chromeLog) console.error(`Chrome said:\n${chromeLog}`);
+    throw e;
   } finally {
     b?.close();
     chrome.kill();
