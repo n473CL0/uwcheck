@@ -57,7 +57,7 @@ UWCheck names the course from the URL (`CSE 351`); add ` = name` after it to pic
 ## Good to know
 
 - **Reminders:** turn them on in **Options → Preferences** to get a notification a day and 2 hours before each deadline, while UWCheck is open.
-- **Your own calendar app:** **Options → Preferences** has a feed address (`http://localhost:7351/calendar.ics`) that Apple Calendar or Outlook on the same computer can subscribe to.
+- **Your own calendar app:** **Options → Preferences** has a feed address (`http://localhost:7351/calendar.ics`): click **Subscribe** to add it to Apple Calendar or Outlook on the same computer.
 - **Keyboard:** press <kbd>?</kbd> (or **Options → Keyboard shortcuts**) for shortcuts. <kbd>/</kbd> searches, <kbd>J</kbd>/<kbd>K</kbd> move through the list, <kbd>X</kbd> ticks.
 
 ## Privacy

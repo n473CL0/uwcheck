@@ -295,6 +295,11 @@ const server = http.createServer(async (req, res) => {
       send(res, 200, { ok: true });
       return setTimeout(restart, 500);
     }
+    // Options › About asks on demand, even with the daily check turned off.
+    if (req.method === 'POST' && url.pathname === '/api/check-update') {
+      if (!(await checkForUpdate())) return send(res, 502, { error: 'Couldn\'t reach npm to check. Are you online?' });
+      return send(res, 200, publicPayload());
+    }
     if (req.method === 'POST' && url.pathname === '/api/quit') {
       send(res, 200, { ok: true });
       return setTimeout(() => process.exit(0), 100);
@@ -575,12 +580,15 @@ function isNewer(a, b) {
   return false;
 }
 
+// Returns false if npm couldn't be reached.
 async function checkForUpdate() {
-  if (process.env.UWCHECK_NO_UPDATE_CHECK) return;
   try {
     const res = await fetch('https://registry.npmjs.org/uwcheck/latest', { signal: AbortSignal.timeout(5000) });
     if (res.ok) latestVersion = (await res.json()).version;
-  } catch {}
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 function updateInfo() {
@@ -682,8 +690,10 @@ function startServer() {
     syncAll().catch((e) => console.error('Sync failed:', e.message));
     const every = Math.max(5, Number(config.autoSyncMinutes) || 30) * 60 * 1000;
     setInterval(() => syncAll().catch(() => {}), every);
-    checkForUpdate();
-    setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+    if (!process.env.UWCHECK_NO_UPDATE_CHECK) {
+      checkForUpdate();
+      setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+    }
     watchForInstall();
   });
 }

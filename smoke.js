@@ -149,6 +149,9 @@ async function main() {
     assert.ok(await b.ev(`$('setDlg').open && !$('pane-keys').hidden && $('optMenu').hidden`), 'the Options menu opens that section');
     await b.click('#tab-prefs');
     assert.ok(await b.ev(`!$('pane-prefs').hidden && $('pane-keys').hidden`), 'the section list switches sections');
+    assert.match(await b.ev(`$('feedSub').href`), /^webcal:\/\/localhost:\d+\/calendar\.ics$/);
+    await b.click('#tab-about');
+    assert.strictEqual(await b.ev(`$('aboutVer').textContent`), require('./package.json').version, 'About shows the version');
     await b.click('#setDlg .dlg-head [data-close]');
     assert.ok(!await b.ev(`$('setDlg').open`), 'the X closes Options');
     console.log('Smoke test passed.');

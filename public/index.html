@@ -155,9 +155,13 @@
   .grid {
     flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
     grid-template-rows: auto; grid-auto-rows: minmax(104px, 1fr);
-    gap: 1px; background: var(--line); border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden;
+    gap: 1px; background: var(--line); border: 1px solid var(--border); border-radius: var(--r-panel); overflow: auto;
   }
-  .dow { background: var(--surface); padding: 8px 10px 6px; font-size: 12px; font-weight: 600; color: var(--faint); }
+  /* In a short window the weeks scroll under the weekday names. */
+  .dow {
+    position: sticky; top: 0; z-index: 1; box-shadow: 0 1px 0 var(--line);
+    background: var(--surface); padding: 8px 10px 6px; font-size: 12px; font-weight: 600; color: var(--faint);
+  }
   .day { background: var(--surface); padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .day.other { background: color-mix(in srgb, var(--surface) 55%, var(--bg)); }
   .day.other .num span:first-child { color: var(--faint); }
@@ -215,9 +219,10 @@
     text-align: left; padding: 1px 6px; border-radius: 6px;
   }
   .more:hover { background: var(--surface-2); color: var(--text); }
-  /* Week view: one tall row, full titles, every item visible (the column scrolls if needed). */
-  .grid.week { grid-auto-rows: minmax(240px, 1fr); }
-  .grid.week .day { overflow: auto; gap: 4px; }
+  /* Week view: one tall row, full titles, every item visible. The row grows to fit the busiest day,
+     so the whole week scrolls together rather than each day on its own. */
+  .grid.week { grid-auto-rows: minmax(min-content, 1fr); }
+  .grid.week .day { gap: 4px; }
   .chip.full { align-items: flex-start; padding: 3px 0 3px 3px; line-height: 1.35; }
   .chip.full .go { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; row-gap: 1px; align-items: center; }
   .chip.full .t, .chip.full .cs { white-space: nowrap; }
@@ -421,7 +426,8 @@
     main { grid-template-columns: 1fr; overflow: auto; }
     .cal-wrap, aside { min-height: auto; }
     .cal-wrap { overflow: visible; }
-    .grid { flex: none; }
+    /* clip, not auto: the page scrolls here, so the weekday names stick to it instead. */
+    .grid { flex: none; overflow: clip; }
     .todo { overflow: visible; }
     aside { overflow: visible; }
   }
@@ -470,6 +476,7 @@
       <button role="menuitem" data-open="prefs">Preferences…</button>
       <hr>
       <button role="menuitem" data-open="keys">Keyboard shortcuts… <kbd>?</kbd></button>
+      <button role="menuitem" data-open="about">About UWCheck…</button>
     </div>
   </div>
 </header>
@@ -557,6 +564,7 @@
         <button type="button" role="tab" id="tab-courses" data-tab="courses" aria-controls="pane-courses">Your courses</button>
         <button type="button" role="tab" id="tab-prefs" data-tab="prefs" aria-controls="pane-prefs">Preferences</button>
         <button type="button" role="tab" id="tab-keys" data-tab="keys" aria-controls="pane-keys">Keyboard shortcuts</button>
+        <button type="button" role="tab" id="tab-about" data-tab="about" aria-controls="pane-about">About</button>
       </div>
 
       <div class="opt-pane" role="tabpanel" id="pane-courses" aria-labelledby="tab-courses">
@@ -618,8 +626,8 @@
         <div class="prefs">
           <span class="k">Feed address</span>
           <div>
-            <div class="feed"><code id="feedUrl"></code><button type="button" class="btn" id="feedCopy">Copy</button></div>
-            <div class="help">Paste it into a calendar app on this computer, such as Apple Calendar (On My Mac) or Outlook. Google Calendar can't reach it.</div>
+            <div class="feed"><code id="feedUrl"></code><span class="feed"><button type="button" class="btn" id="feedCopy">Copy</button><a class="btn" id="feedSub">Subscribe</a></span></div>
+            <div class="help">Subscribe opens it in your calendar app, or paste it into one on this computer, such as Apple Calendar (On My Mac) or Outlook. Google Calendar can't reach it.</div>
           </div>
         </div>
       </div>
@@ -643,6 +651,17 @@
           <dt><kbd>Esc</kbd></dt><dd>Close a popup, or clear the search</dd>
           <dt><kbd>?</kbd></dt><dd>Show this list</dd>
         </dl>
+      </div>
+
+      <div class="opt-pane" role="tabpanel" id="pane-about" aria-labelledby="tab-about" hidden>
+        <h3 class="grp">UWCheck</h3>
+        <div class="prefs">
+          <span class="k">Version</span>
+          <div>
+            <div class="feed"><span id="aboutVer"></span><button type="button" class="btn" id="checkBtn"></button></div>
+            <div class="help" id="aboutNote" role="status"></div>
+          </div>
+        </div>
       </div>
     </div>
   </form>
@@ -815,19 +834,24 @@ function renderSources() {
     box.append(t);
   }
   if (data.update) {
-    const { latest, command, autoRestart, oneClick } = data.update;
+    const { latest, oneClick } = data.update;
     const u = document.createElement('button');
     u.className = 'pill update';
     u.title = oneClick ? `Click to update to UWCheck ${latest}` : `UWCheck ${latest} is available. Click to copy the update command.`;
     u.innerHTML = '<span class="dot"></span>';
     u.append(updating ? 'Updating…' : `Update to ${latest}`);
     u.disabled = updating;
-    u.onclick = oneClick ? update : async () => {
-      try { await navigator.clipboard.writeText(command); } catch {}
-      toast(`Copied "${command}". Run it in a terminal, ${autoRestart ? 'and UWCheck switches over within a minute.' : 'then restart UWCheck.'}`, 8000);
-    };
+    u.onclick = startUpdate;
     box.append(u);
   }
+}
+
+// Updates in place when the app can; otherwise copies the command that does.
+async function startUpdate() {
+  const { command, autoRestart, oneClick } = data.update;
+  if (oneClick) return update();
+  try { await navigator.clipboard.writeText(command); } catch {}
+  toast(`Copied "${command}". Run it in a terminal, ${autoRestart ? 'and UWCheck switches over within a minute.' : 'then restart UWCheck.'}`, 8000);
 }
 
 // The server installs the new version, then restarts onto it. Keep asking until the new one answers;
@@ -1406,7 +1430,7 @@ menu.onkeydown = (e) => {
 };
 
 // The Options window: one section showing at a time, picked from the list on the left.
-const TABS = ['courses', 'prefs', 'keys'];
+const TABS = ['courses', 'prefs', 'keys', 'about'];
 function showTab(tab, focus) {
   for (const t of TABS) {
     $(`tab-${t}`).setAttribute('aria-selected', t === tab);
@@ -1424,7 +1448,7 @@ $('optNav').onkeydown = (e) => {
   showTab(TABS[(to + TABS.length) % TABS.length], true);
 };
 
-// tab: 'courses', 'prefs' or 'keys'. Course fields are filled fresh each time, dropping unsaved edits.
+// tab: 'courses', 'prefs', 'keys' or 'about'. Course fields are filled fresh each time, dropping unsaved edits.
 function openOptions(tab = 'courses') {
   closeMenu();
   hidePop();
@@ -1441,10 +1465,36 @@ function openOptions(tab = 'courses') {
   $('sCanvasCourses').value = Object.entries(c.canvasCourses || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
   $('sRemind').checked = ui.reminders && window.Notification?.permission === 'granted';
   $('feedUrl').textContent = `${location.origin}/calendar.ics`;
+  $('feedSub').href = `webcal://${location.host}/calendar.ics`;
+  renderAbout();
   showTab(tab);
   if (!$('setDlg').open) $('setDlg').showModal();
   $(`tab-${tab}`).focus();
 }
+// About: the button checks npm; once a newer version is known, it gets it like the header's Update pill.
+function renderAbout(note = '') {
+  const u = data.update;
+  $('aboutVer').textContent = data.version;
+  $('checkBtn').textContent = u ? `Update to ${u.latest}` : 'Check for updates';
+  $('aboutNote').textContent = u ? `Version ${u.latest} is available.` : note;
+}
+$('checkBtn').onclick = async () => {
+  if (data.update) { $('setDlg').close(); return startUpdate(); } // its progress shows on the page
+  const b = $('checkBtn');
+  b.disabled = true;
+  b.textContent = 'Checking…';
+  let note;
+  try {
+    data = await api('/api/check-update', {});
+    render();
+    note = 'You have the latest version.';
+  } catch (e) {
+    note = e.message;
+  } finally {
+    b.disabled = false;
+    renderAbout(note);
+  }
+};
 // "key = name" per line. A line with no name gives '', and the server picks one (from the URL, or Ed).
 function pairs(text) {
   return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
